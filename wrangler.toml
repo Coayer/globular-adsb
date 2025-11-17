@@ -1,0 +1,25 @@
+name = "globular-adsb-worker"
+compatibility_date = "2025-09-21"
+compatibility_flags = ["nodejs_compat"]
+main = "index.js"
+
+#[observability]
+#[observability.logs]
+#enabled = true
+#head_sampling_rate = 1
+#invocation_logs = true
+#persist = true
+
+[assets]
+directory = "./public"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "globular-adsb"
+
+[triggers]
+crons = ["0 * * * *"]
+
+[[routes]]
+pattern = "globular-adsb.copey.dev"
+custom_domain = true

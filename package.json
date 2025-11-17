@@ -1,0 +1,15 @@
+{
+  "name": "adsb-globe",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "prod": "node index.js"
+  },
+  "dependencies": {
+    "flightradarapi": "^1.4.0"
+  }
+}

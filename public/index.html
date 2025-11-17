@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Globular ADS-B</title>
+
+        <style>
+            body {
+                margin: 0;
+            }
+            #time {
+                position: absolute;
+                bottom: 8px;
+                left: 8px;
+                color: lightblue;
+                font-family: monospace;
+            }
+        </style>
+
+        <script src="//cdn.jsdelivr.net/npm/globe.gl"></script>
+    </head>
+
+    <body>
+        <div id="globeViz"></div>
+        <div id="time"></div>
+        <script src="script.js" type="module"></script>
+        <script
+            defer
+            src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon='{"token": "46adedbd97b249e8bbbac14602a7e531"}'
+        ></script>
+    </body>
+</html>
