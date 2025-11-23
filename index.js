@@ -1,4 +1,4 @@
-import { FlightRadar24API } from "./lib/flightradarapi";
+import { FlightRadar24API } from "./lib/flightradarapi"; // Needed to slightly modify the library to run on the Cloudflare Worker runtime
 
 /*
 https://mapscaping.com/bounding-box-calculator/
