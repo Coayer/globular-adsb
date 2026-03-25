@@ -13,6 +13,9 @@ import * as THREE from "https://esm.sh/three";
 
 // Constants
 const FRAME_RATE_SCALE = 1 / 60;
+const ASSETS_BASE = location.hostname !== 'localhost'
+    ? 'https://globular-adsb-assets.copey.dev'
+    : '';
 const EARTH_RADIUS_KM = 6371;
 const FEET_TO_KM = 0.0003048;
 
@@ -99,7 +102,7 @@ const timeDisplay = document.getElementById("time");
 const airports = {};
 
 // Load airport CSV
-fetch("https://globular-adsb-assets.copey.dev/airports.csv")
+fetch(`${ASSETS_BASE}/airports.csv`)
     .then((r) => r.text())
     .then((csv) => {
         csv.trim()
@@ -209,7 +212,7 @@ if (navigator.geolocation) {
 
 const timestamp = new Date().getTime();
 // Load flights with cache buster
-fetch(`https://globular-adsb-assets.copey.dev/flights.json?t=${timestamp}`)
+fetch(`${ASSETS_BASE}/flights.json?t=${timestamp}`)
     .then((r) => r.json())
     .then((data) => {
         if (data.timestamp) {
@@ -240,7 +243,7 @@ fetch(`https://globular-adsb-assets.copey.dev/flights.json?t=${timestamp}`)
     });
 
 // Flight click behavior
-globe.onObjectClick((flight) => {
+function selectFlight(flight) {
     console.log("Flight clicked:", flight);
 
     const origin = airports[flight.origin];
@@ -275,7 +278,9 @@ globe.onObjectClick((flight) => {
     globe.arcsData(arcs);
     globe.labelsData(labels);
     globe.pointsData([{ lat: flight.lat, lng: flight.lng }]);
-});
+}
+
+globe.onObjectClick(selectFlight);
 
 // Load day/night textures and apply shader
 Promise.all([
@@ -318,6 +323,50 @@ Promise.all([
 // Resize renderer on window resize
 window.addEventListener("resize", () => {
     globe.width(window.innerWidth).height(window.innerHeight);
+});
+
+// Autopilot: select a random flight with known origin + destination every 5s
+let autopilotInterval = null;
+
+function selectRandomFlight() {
+    const flights = globe.objectsData() || [];
+    const eligible = flights.filter(
+        (f) => airports[f.origin] && airports[f.destination]
+    );
+    if (!eligible.length) return;
+
+    const flight = eligible[Math.floor(Math.random() * eligible.length)];
+    selectFlight(flight);
+
+    const origin = airports[flight.origin];
+    const dest = airports[flight.destination];
+    const toRad = (d) => (d * Math.PI) / 180;
+    const lat1 = toRad(origin.lat), lng1 = toRad(origin.lng);
+    const lat2 = toRad(dest.lat), lng2 = toRad(dest.lng);
+
+    // Haversine angular distance in degrees
+    const dlat = lat2 - lat1, dlng = lng2 - lng1;
+    const a = Math.sin(dlat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlng / 2) ** 2;
+    const angularDist = (2 * Math.asin(Math.sqrt(a)) * 180) / Math.PI;
+
+    // Spherical midpoint
+    const Bx = Math.cos(lat2) * Math.cos(lng2 - lng1);
+    const By = Math.cos(lat2) * Math.sin(lng2 - lng1);
+    const midLat = (Math.atan2(Math.sin(lat1) + Math.sin(lat2), Math.sqrt((Math.cos(lat1) + Bx) ** 2 + By ** 2)) * 180) / Math.PI;
+    const midLng = origin.lng + (Math.atan2(By, Math.cos(lat1) + Bx) * 180) / Math.PI;
+
+    const altitude = Math.min(4, Math.max(1.2, angularDist / 50));
+    globe.pointOfView({ lat: midLat, lng: midLng, altitude }, 2000);
+}
+
+document.getElementById("autopilot-toggle").addEventListener("change", (e) => {
+    if (e.target.checked) {
+        selectRandomFlight();
+        autopilotInterval = setInterval(selectRandomFlight, 6000);
+    } else {
+        clearInterval(autopilotInterval);
+        autopilotInterval = null;
+    }
 });
 
 // reoload the page every hour to get fresh data
