@@ -325,47 +325,53 @@ window.addEventListener("resize", () => {
     globe.width(window.innerWidth).height(window.innerHeight);
 });
 
-// Autopilot: select a random flight with known origin + destination every 5s
-let autopilotInterval = null;
+// Autopilot: select a random flight and pan from origin to destination
+let autopilotTimeout = null;
 
-function selectRandomFlight() {
+function autopilotStep() {
     const flights = globe.objectsData() || [];
     const eligible = flights.filter(
         (f) => airports[f.origin] && airports[f.destination]
     );
-    if (!eligible.length) return;
+    if (!eligible.length) {
+        autopilotTimeout = setTimeout(autopilotStep, 3000);
+        return;
+    }
 
     const flight = eligible[Math.floor(Math.random() * eligible.length)];
     selectFlight(flight);
 
     const origin = airports[flight.origin];
     const dest = airports[flight.destination];
-    const toRad = (d) => (d * Math.PI) / 180;
-    const lat1 = toRad(origin.lat), lng1 = toRad(origin.lng);
-    const lat2 = toRad(dest.lat), lng2 = toRad(dest.lng);
 
     // Haversine angular distance in degrees
-    const dlat = lat2 - lat1, dlng = lng2 - lng1;
+    const toRad = (d) => (d * Math.PI) / 180;
+    const lat1 = toRad(origin.lat), lat2 = toRad(dest.lat);
+    const dlat = lat2 - lat1, dlng = toRad(dest.lng - origin.lng);
     const a = Math.sin(dlat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlng / 2) ** 2;
     const angularDist = (2 * Math.asin(Math.sqrt(a)) * 180) / Math.PI;
 
-    // Spherical midpoint
-    const Bx = Math.cos(lat2) * Math.cos(lng2 - lng1);
-    const By = Math.cos(lat2) * Math.sin(lng2 - lng1);
-    const midLat = (Math.atan2(Math.sin(lat1) + Math.sin(lat2), Math.sqrt((Math.cos(lat1) + Bx) ** 2 + By ** 2)) * 180) / Math.PI;
-    const midLng = origin.lng + (Math.atan2(By, Math.cos(lat1) + Bx) * 180) / Math.PI;
+    // Scale pan duration with distance: ~50ms per degree, clamped 1500–8000ms
+    const panDuration = Math.min(7000, Math.max(2000, angularDist * 50));
 
-    const altitude = Math.min(4, Math.max(1.2, angularDist / 50));
-    globe.pointOfView({ lat: midLat, lng: midLng, altitude }, 2000);
+    // Pan to origin first
+    globe.pointOfView({ lat: origin.lat, lng: origin.lng, altitude: 1.5 }, 2000);
+
+    // Then pan to destination at distance-scaled speed
+    autopilotTimeout = setTimeout(() => {
+        globe.pointOfView({ lat: dest.lat, lng: dest.lng, altitude: 1.5 }, panDuration);
+
+        // Pick next flight after the pan completes
+        autopilotTimeout = setTimeout(autopilotStep, panDuration + 1000);
+    }, 2500);
 }
 
 document.getElementById("autopilot-toggle").addEventListener("change", (e) => {
     if (e.target.checked) {
-        selectRandomFlight();
-        autopilotInterval = setInterval(selectRandomFlight, 6000);
+        autopilotStep();
     } else {
-        clearInterval(autopilotInterval);
-        autopilotInterval = null;
+        clearTimeout(autopilotTimeout);
+        autopilotTimeout = null;
     }
 });
 
