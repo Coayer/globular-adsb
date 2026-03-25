@@ -297,21 +297,18 @@ Promise.all([
         fragmentShader: dayNightShader.fragmentShader,
     });
 
-    material.uniforms.globeRotation.value.set(-25, 35);
-
     globe
         .globeMaterial(material)
         .backgroundImageUrl(
             "//cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png"
-        )
-        .onZoom(({ lng, lat }) => {
-            material.uniforms.globeRotation.value.set(lng, lat);
-        });
+        );
 
     // Animation loop
     const animate = () => {
         now = Date.now();
         material.uniforms.sunPosition.value.set(...getSunPosition(now));
+        const pov = globe.pointOfView();
+        material.uniforms.globeRotation.value.set(pov.lng, pov.lat);
         requestAnimationFrame(animate);
     };
 
