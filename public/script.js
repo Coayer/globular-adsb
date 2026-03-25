@@ -318,6 +318,11 @@ Promise.all([
     requestAnimationFrame(animate);
 });
 
+// Resize renderer on window resize
+window.addEventListener("resize", () => {
+    globe.width(window.innerWidth).height(window.innerHeight);
+});
+
 // reoload the page every hour to get fresh data
 setTimeout(() => {
     location.reload();
