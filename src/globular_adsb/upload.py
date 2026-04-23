@@ -1,0 +1,38 @@
+"""Upload pipeline artifacts to the Cloudflare R2 (S3-compatible) assets bucket."""
+
+import mimetypes
+from pathlib import Path
+
+import boto3
+from botocore.config import Config
+
+from globular_adsb import config
+
+
+def _client():
+    return boto3.client(
+        "s3",
+        endpoint_url=config.R2_ENDPOINT,
+        aws_access_key_id=config.R2_ACCESS_KEY,
+        aws_secret_access_key=config.R2_SECRET_KEY,
+        config=Config(signature_version="s3v4"),
+        region_name="auto",
+    )
+
+
+def upload_file(local_path: Path, key: str) -> None:
+    content_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
+    print(f"Uploading {local_path} → s3://{config.R2_BUCKET}/{key}")
+    _client().upload_file(
+        str(local_path),
+        config.R2_BUCKET,
+        key,
+        ExtraArgs={"ContentType": content_type},
+    )
+
+
+def upload_assets(dist_dir: Path, airports_csv: Path) -> None:
+    upload_file(dist_dir / "flights.json", "flights.json")
+    for heatmap in sorted((dist_dir / "heatmaps").glob("heatmap_*.webp")):
+        upload_file(heatmap, f"heatmaps/{heatmap.name}")
+    upload_file(airports_csv, "airports.csv")

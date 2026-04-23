@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Globular ADS-B: Interactive 3D Globe Flight Tracker</title>
+        <meta name="description" content="ADS-B aircraft data displayed on an interactive 3D globe showing global flight routes without Mercator projection distortion. Click aircraft to show source and destination airports." />
+        <meta name="theme-color" content="#1a1a1a" />
+        <meta property="og:title" content="Globular ADS-B: Interactive 3D Globe Flight Tracker" />
+        <meta property="og:description" content="ADS-B aircraft data displayed on an interactive 3D globe showing global flight routes without Mercator projection distortion. Click aircraft to show source and destination airports." />
+        <meta property="og:type" content="website" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="canonical" href="https://globular-adsb.copey.dev/" />
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+
+        <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "Globular ADS-B",
+            "description": "Interactive 3D globe displaying real-time ADS-B aircraft data and flight routes",
+            "url": "https://globular-adsb.copey.dev/"
+        }
+        </script>
+
+        <style>
+            body, #globeViz, canvas {
+                margin: 0;
+                background: #000;
+                overflow: hidden;
+            }
+            #time {
+                position: absolute;
+                bottom: 8px;
+                right: 8px;
+                color: #00d4ff;
+                font-family: monospace;
+                letter-spacing: 0.05em;
+            }
+            #controls {
+                position: absolute;
+                bottom: 8px;
+                left: 8px;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            #autopilot-label, #heatmap-label, #heatmap-enable-label, #bordermap-label {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: #00d4ff;
+                font-family: monospace;
+                font-size: 0.78em;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                user-select: none;
+            }
+            #bottom-row {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                gap: 12px;
+                background: rgba(0, 0, 0, 0.85);
+                border: 1px solid rgba(0, 180, 220, 0.4);
+                border-top: 2px solid rgba(0, 200, 255, 0.6);
+                padding: 8px 10px;
+            }
+            #heatmap-extra {
+                display: none;
+                align-items: center;
+                gap: 8px;
+            }
+            #heatmap-extra.visible {
+                display: flex;
+            }
+            .ctrl-sep {
+                color: rgba(0, 180, 220, 0.45);
+                font-family: monospace;
+                user-select: none;
+            }
+            #recenter-btn {
+                display: none;
+                background: rgba(0, 180, 220, 0.08);
+                border: 1px solid rgba(0, 180, 220, 0.7);
+                color: #00d4ff;
+                font-family: monospace;
+                font-size: 0.75em;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                cursor: pointer;
+                padding: 3px 8px;
+                user-select: none;
+                outline: none;
+                transition: background 0.12s, border-color 0.12s, color 0.12s;
+            }
+            #recenter-btn.visible {
+                display: inline-block;
+            }
+            #recenter-btn:hover {
+                background: rgba(0, 180, 220, 0.22);
+                border-color: #00d4ff;
+                color: #fff;
+            }
+            #recenter-btn:active {
+                background: rgba(0, 180, 220, 0.35);
+            }
+            #last24h-btn, #heatmap-animate-btn {
+                background: rgba(0, 180, 220, 0.08);
+                border: 1px solid rgba(0, 180, 220, 0.7);
+                color: #00d4ff;
+                font-family: monospace;
+                font-size: 0.75em;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                cursor: pointer;
+                padding: 3px 8px;
+                user-select: none;
+                outline: none;
+                transition: background 0.12s, border-color 0.12s, color 0.12s;
+            }
+            #last24h-btn:hover, #heatmap-animate-btn:hover {
+                background: rgba(0, 180, 220, 0.22);
+                border-color: #00d4ff;
+                color: #fff;
+            }
+            #last24h-btn:active, #heatmap-animate-btn:active {
+                background: rgba(0, 180, 220, 0.35);
+            }
+            #last24h-btn.active, #heatmap-animate-btn.active {
+                background: rgba(0, 180, 220, 0.25);
+                border-color: #00d4ff;
+                color: #fff;
+            }
+            #heatmap-time-label {
+                color: #00d4ff;
+                font-family: monospace;
+                font-size: 0.75em;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+            }
+            #heatmap-time-number {
+                display: inline-block;
+                width: 4.5ch;
+                text-align: right;
+            }
+            #heatmap-time {
+                width: 260px;
+                cursor: pointer;
+                appearance: none;
+                height: 4px;
+                background: rgba(0, 180, 220, 0.08);
+                border: 1px solid rgba(0, 180, 220, 0.7);
+                outline: none;
+                transition: background 0.12s, border-color 0.12s;
+            }
+            #heatmap-time.active {
+                background: rgba(0, 180, 220, 0.25);
+                border-color: #00d4ff;
+            }
+            #heatmap-time::-webkit-slider-thumb {
+                appearance: none;
+                width: 10px;
+                height: 18px;
+                background: #00d4ff;
+                cursor: pointer;
+                border: none;
+            }
+            #heatmap-time::-moz-range-thumb {
+                width: 10px;
+                height: 18px;
+                background: #00d4ff;
+                cursor: pointer;
+                border: none;
+                border-radius: 0;
+            }
+            #heatmap-time.greyed, #heatmap-time-label.greyed {
+                opacity: 0.35;
+            }
+            #heatmap-progress {
+                display: none;
+                align-items: center;
+                gap: 6px;
+                width: 260px;
+            }
+            #heatmap-progress-bar {
+                flex: 1;
+                height: 4px;
+                background: #1a3a44;
+                border: 1px solid rgba(0, 180, 220, 0.5);
+                position: relative;
+                overflow: hidden;
+            }
+            #heatmap-progress-fill {
+                height: 100%;
+                background: #00d4ff;
+                width: 0%;
+            }
+
+            #heatmap-progress-count {
+                color: #00d4ff;
+                font-family: monospace;
+                font-size: 0.7em;
+                letter-spacing: 0.08em;
+                white-space: nowrap;
+            }
+            #heatmap-download-btn {
+                display: none;
+                background: rgba(0, 180, 220, 0.08);
+                border: 1px solid rgba(0, 180, 220, 0.7);
+                color: #00d4ff;
+                font-family: monospace;
+                font-size: 0.72em;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                cursor: pointer;
+                padding: 3px 8px;
+                user-select: none;
+                outline: none;
+                white-space: nowrap;
+                width: 310px;
+                transition: background 0.12s, border-color 0.12s, color 0.12s;
+            }
+            #heatmap-download-btn.visible {
+                display: block;
+            }
+            #heatmap-download-btn:hover {
+                background: rgba(0, 180, 220, 0.22);
+                border-color: #00d4ff;
+                color: #fff;
+            }
+            #heatmap-download-btn:active {
+                background: rgba(0, 180, 220, 0.35);
+            }
+            @keyframes confirm-flash {
+                0%, 100% { border-color: rgba(0, 180, 220, 0.7); color: #00d4ff; background: rgba(0, 180, 220, 0.08); }
+                50% { background: rgba(255, 200, 0, 0.25); border-color: #ffd700; color: #ffd700; }
+            }
+            #heatmap-download-btn.flash {
+                animation: confirm-flash 0.45s ease 3;
+            }
+            #autopilot-toggle, #heatmap-toggle, #heatmap-enable-toggle, #bordermap-toggle {
+                appearance: none;
+                width: 36px;
+                height: 20px;
+                background: #1c2a2e;
+                border: 1px solid rgba(0, 180, 220, 0.5);
+                position: relative;
+                cursor: pointer;
+                transition: background 0.15s;
+                flex-shrink: 0;
+            }
+            #autopilot-toggle::after, #heatmap-toggle::after, #heatmap-enable-toggle::after, #bordermap-toggle::after {
+                content: '';
+                position: absolute;
+                width: 12px;
+                height: 14px;
+                background: #4a6a72;
+                top: 3px;
+                left: 3px;
+                transition: left 0.15s, background 0.15s;
+            }
+            #autopilot-toggle:checked, #heatmap-toggle:checked, #heatmap-enable-toggle:checked, #bordermap-toggle:checked {
+                background: #002a35;
+                border-color: #00d4ff;
+            }
+            #autopilot-toggle:checked::after, #heatmap-toggle:checked::after, #heatmap-enable-toggle:checked::after, #bordermap-toggle:checked::after {
+                left: 21px;
+                background: #00d4ff;
+            }
+        </style>
+
+        <script src="//cdn.jsdelivr.net/npm/globe.gl"></script>
+    </head>
+
+    <body>
+        <div id="globeViz"></div>
+        <div id="time"></div>
+        <div id="controls">
+            <div id="bottom-row">
+                <button id="recenter-btn">➤ RECENTER</button>
+                <span class="ctrl-sep" id="recenter-sep" style="display:none">|</span>
+                <label id="bordermap-label">
+                    <span>Borders</span>
+                    <input type="checkbox" id="bordermap-toggle" />
+                </label>
+                <label id="autopilot-label">
+                    <span>Autopilot</span>
+                    <input type="checkbox" id="autopilot-toggle" />
+                </label>
+                <label id="heatmap-enable-label">
+                    <span>Heatmap</span>
+                    <input type="checkbox" id="heatmap-enable-toggle" checked />
+                </label>
+                <label id="heatmap-label">
+                    <span>LIVE TRAFFIC</span>
+                    <input type="checkbox" id="heatmap-toggle" checked />
+                </label>
+                <div id="heatmap-extra" class="visible">
+                    <span class="ctrl-sep">|</span>
+                    <button id="last24h-btn">YDAY</button>
+                    <button id="heatmap-animate-btn">▶ ANIMATE</button>
+                    <span class="ctrl-sep">|</span>
+                    <span id="heatmap-time-label"><span id="heatmap-slider-date"></span> <span id="heatmap-time-number">2300</span>Z-12H</span>
+                    <input type="range" id="heatmap-time" min="1" max="36" step="1" value="1" />
+                    <div id="heatmap-progress">
+                        <div id="heatmap-progress-bar">
+                            <div id="heatmap-progress-fill"></div>
+                        </div>
+                        <span id="heatmap-progress-count"></span>
+                    </div>
+                    <button id="heatmap-download-btn">↓ DOWNLOAD FRAMES · APPROX 90 MB</button>
+                </div>
+            </div>
+        </div>
+        <script src="script.js" type="module"></script>
+        <script
+            defer
+            src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon='{"token": "46adedbd97b249e8bbbac14602a7e531"}'
+        ></script>
+    </body>
+</html>
