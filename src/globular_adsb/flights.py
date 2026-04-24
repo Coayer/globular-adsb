@@ -1,10 +1,13 @@
 import csv
 import json
+import logging
 import math
 import time
 from pathlib import Path
 
 from FlightRadar24.api import FlightRadar24API
+
+log = logging.getLogger(__name__)
 
 LAT_STEP = 30
 LON_STEP = 60
@@ -80,7 +83,7 @@ def fetch_flights_for_grid(
     flights: list[dict] = []
     total_raw = 0
 
-    print(f"\n── {label} ({len(grid)} tiles) ──")
+    log.info("── %s (%d tiles) ──", label, len(grid))
     for i, bounds in enumerate(grid, 1):
         try:
             results = fr_api.get_flights(bounds=bounds)
@@ -103,9 +106,9 @@ def fetch_flights_for_grid(
                         }
                     )
                     new += 1
-            print(f"  [{i}/{len(grid)}] {new} new / {len(results)} raw")
+            log.info("[%d/%d] %d new / %d raw", i, len(grid), new, len(results))
         except Exception as e:
-            print(f"  [{i}/{len(grid)}] error — {e}")
+            log.error("[%d/%d] error — %s", i, len(grid), e)
 
     return flights, total_raw
 
@@ -124,20 +127,22 @@ def run(archive_dir: Path, dist_dir: Path, airports_csv: Path) -> Path:
 
     archive_path = archive_dir / f"{timestamp}.json"
     archive_path.write_text(json.dumps(payload, indent=2))
-    print(f"\nSaved {len(flights)} flights → {archive_path}")
+    log.info("Saved %d flights → %s", len(flights), archive_path)
 
     airports = load_airports(airports_csv)
     longhaul = [f for f in flights if is_longhaul(f, airports)]
     dist_path = dist_dir / "flights.json"
     dist_path.write_text(json.dumps({"timestamp": timestamp, "flights": longhaul}))
-    print(f"Updated {dist_path}  ({len(longhaul)}/{len(flights)} longhaul)")
+    log.info("Updated %s  (%d/%d longhaul)", dist_path, len(longhaul), len(flights))
 
     return dist_path
 
 
 def main() -> None:
     from globular_adsb.config import AIRPORTS_CSV, ARCHIVE_DIR, DIST_DIR
+    from globular_adsb.pipeline import _LOG_DATE, _LOG_FORMAT
 
+    logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT, datefmt=_LOG_DATE)
     run(ARCHIVE_DIR, DIST_DIR, AIRPORTS_CSV)
 
 

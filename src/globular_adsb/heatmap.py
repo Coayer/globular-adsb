@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -14,11 +15,13 @@ from globular_adsb.flights import (
     load_airports,
 )
 
+log = logging.getLogger(__name__)
+
 WIDTH = 8192
 HEIGHT = 4096
 WINDOW_HOURS = 12
-STEP_HOURS = 0.25
-TOTAL_HOURS = 48
+STEP_HOURS = 0.5
+TOTAL_HOURS = 60
 DILATION_RADIUS = 2
 QUALITY_HIGH = 90
 QUALITY_LOW = 30
@@ -68,7 +71,7 @@ def build_heatmap(
         x, y = latlon_to_xy(f["latitude"], f["longitude"])
         density[max(0, y - r) : y + r + 1, max(0, x - r) : x + r + 1] += w
 
-    print(f"  {len(flights) - skipped} weighted, {skipped} missing/short-haul skipped")
+    log.info("%d weighted, %d missing/short-haul skipped", len(flights) - skipped, skipped)
     return density
 
 
@@ -102,12 +105,42 @@ def density_to_rgba(density: np.ndarray) -> np.ndarray:
     return rgba
 
 
+def _expected_frame_paths(output_dir: Path) -> set[Path]:
+    paths = {output_dir / "heatmap_last24h.webp"}
+    max_n = TOTAL_HOURS - WINDOW_HOURS
+    n = 1.0
+    while n <= max_n + 1e-9:
+        n_r = round(n, 10)
+        paths.add(output_dir / f"heatmap_{n_r:g}h.webp")
+        n = round(n + STEP_HOURS, 10)
+    return paths
+
+
 def needs_regeneration(output_dir: Path, interval_hours: float = STEP_HOURS) -> bool:
-    existing = list(output_dir.glob("heatmap_*.webp"))
-    if not existing:
+    expected = _expected_frame_paths(output_dir)
+    existing = set(output_dir.glob("heatmap_*.webp"))
+
+    if expected - existing:
         return True
-    newest_mtime = max(p.stat().st_mtime for p in existing)
-    return (time.time() - newest_mtime) >= interval_hours * 3600
+    if existing - expected:
+        return True
+
+    midnight_ts = (
+        datetime.datetime.now(datetime.timezone.utc)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+    last24h = output_dir / "heatmap_last24h.webp"
+    if last24h.stat().st_mtime < midnight_ts:
+        return True
+
+    slider_frames = existing - {last24h}
+    if slider_frames:
+        newest_mtime = max(p.stat().st_mtime for p in slider_frames)
+        if (time.time() - newest_mtime) >= interval_hours * 3600:
+            return True
+
+    return False
 
 
 def run_window(
@@ -118,23 +151,28 @@ def run_window(
     end_hours: float,
     quality: int = QUALITY_LOW,
 ) -> Path:
-    print(f"Loading flights {start_hours}–{end_hours}h ago …")
+    # Subprocess workers don't inherit handlers from the parent process.
+    from globular_adsb.pipeline import _LOG_DATE, _LOG_FORMAT
+
+    logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT, datefmt=_LOG_DATE)
+
+    log.info("Loading flights %g–%gh ago …", start_hours, end_hours)
     flights = load_flights_window(archive_dir, start_hours, end_hours)
-    print(f"  {len(flights)} flight records found")
+    log.info("%d flight records found", len(flights))
 
     if not flights:
-        print("No data — nothing to render.")
+        log.warning("No data — nothing to render.")
         return output_path
 
-    print("Building density map …")
+    log.info("Building density map …")
     density = build_heatmap(flights, airports)
 
-    print("Rendering colours …")
+    log.info("Rendering colours …")
     rgba = density_to_rgba(density)
 
     output_path.parent.mkdir(exist_ok=True)
     Image.fromarray(rgba, mode="RGBA").save(output_path, format="WEBP", quality=quality)
-    print(f"Saved {output_path}  ({WIDTH}×{HEIGHT})")
+    log.info("Saved %s  (%dx%d)", output_path, WIDTH, HEIGHT)
     return output_path
 
 
@@ -145,18 +183,20 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     today_midnight = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     hours_since_midnight = (now_utc - today_midnight).total_seconds() / 3600
+    midnight_ts = today_midnight.timestamp()
 
+    last24h_path = output_dir / "heatmap_last24h.webp"
     tasks: list[tuple] = [
         (
             archive_dir,
             airports,
-            output_dir / "heatmap_last24h.webp",
+            last24h_path,
             hours_since_midnight,
             hours_since_midnight + 24.0,
             QUALITY_HIGH,
         ),
     ]
-    # Generate slider positions 1–(TOTAL_HOURS-WINDOW_HOURS) in STEP_HOURS increments.
+    # Slider positions 1–(TOTAL_HOURS-WINDOW_HOURS) in STEP_HOURS increments.
     # n=1 → 2300Z yesterday, n=25 → 2300Z day-before, wrapping every 24.
     max_n = TOTAL_HOURS - WINDOW_HOURS
     n = 1.0
@@ -175,17 +215,59 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         )
         n = round(n + STEP_HOURS, 10)
 
+    expected_paths = {t[2] for t in tasks}
+
+    # Remove extraneous files not in the expected set.
+    for p in sorted(output_dir.glob("heatmap_*.webp")):
+        if p not in expected_paths:
+            log.warning("Removing extraneous frame: %s", p.name)
+            p.unlink()
+
+    # last24h: regenerate if missing or generated before today's midnight.
+    regen_last24h = (
+        not last24h_path.exists() or last24h_path.stat().st_mtime < midnight_ts
+    )
+    if regen_last24h and last24h_path.exists():
+        log.info("heatmap_last24h.webp pre-dates midnight — regenerating for new calendar day")
+
+    # Slider frames: generate missing ones; full regeneration only when interval elapsed.
+    slider_tasks = [t for t in tasks if t[2] != last24h_path]
+    slider_paths = {t[2] for t in slider_tasks}
+    existing_sliders = {p for p in slider_paths if p.exists()}
+    missing_sliders = slider_paths - existing_sliders
+
+    tasks_to_run = []
+    if regen_last24h:
+        tasks_to_run.extend(t for t in tasks if t[2] == last24h_path)
+
+    if missing_sliders:
+        log.info("%d slider frame(s) missing — generating missing frames", len(missing_sliders))
+        tasks_to_run.extend(t for t in slider_tasks if t[2] in missing_sliders)
+    elif existing_sliders:
+        newest_mtime = max(p.stat().st_mtime for p in existing_sliders)
+        if (time.time() - newest_mtime) >= STEP_HOURS * 3600:
+            tasks_to_run.extend(slider_tasks)
+    else:
+        tasks_to_run.extend(slider_tasks)
+
+    if not tasks_to_run:
+        log.info("All frames up to date.")
+        return []
+
+    log.info("Generating %d frame(s) …", len(tasks_to_run))
     outputs = []
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(run_window, *t): t[2] for t in tasks}
+        futures = {executor.submit(run_window, *t): t[2] for t in tasks_to_run}
         for future in as_completed(futures):
             outputs.append(future.result())
     return outputs
 
 
 def main() -> None:
-    from globular_adsb.config import ARCHIVE_DIR, AIRPORTS_CSV, DIST_DIR
+    from globular_adsb.config import AIRPORTS_CSV, ARCHIVE_DIR, DIST_DIR
+    from globular_adsb.pipeline import _LOG_DATE, _LOG_FORMAT
 
+    logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT, datefmt=_LOG_DATE)
     run(ARCHIVE_DIR, AIRPORTS_CSV, DIST_DIR / "heatmaps")
 
 

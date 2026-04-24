@@ -18,7 +18,7 @@ const ASSETS_BASE = location.hostname !== 'localhost'
     : '';
 const EARTH_RADIUS_KM = 6371;
 const FEET_TO_KM = 0.0003048;
-const ANIMATION_STEP = 0.75;
+const ANIMATION_STEP = 0.5;
 
 // Day/Night blending shader
 const dayNightShader = {
@@ -566,6 +566,8 @@ Promise.all([
         } else {
             clearTimeout(autopilotTimeout);
             autopilotTimeout = null;
+            autopilotSpinning = false;
+            stopManualSpin();
         }
     });
 
@@ -626,6 +628,75 @@ window.addEventListener("resize", () => {
 let autopilotTimeout = null;
 let autopilotHeatmapInterval = null;
 let heatmapAnimating = false;
+let autopilotSpinning = false;
+
+// --- Autopilot: heatmap-only spin mode ---
+// Active when autopilot is on, heatmap is enabled, and live traffic is off.
+let spinLng = 0;
+let spinCurrentLat = 40;
+let spinTargetLat = 40;   // smoothed intermediate target
+let spinRawTargetLat = 40; // raw centroid, updated on interval
+let spinRaf = null;
+let spinLatTimer = null;
+let spinPaused = false;
+
+function centroidLatNear(centerLng, lngWindow = 80, minCount = 10) {
+    const inWindow = allFlights.filter(f => {
+        let d = Math.abs(f.lng - centerLng) % 360;
+        if (d > 180) d = 360 - d;
+        return d <= lngWindow;
+    });
+    const src = inWindow.length >= minCount ? inWindow : allFlights;
+    if (!src.length) return 40;
+    return src.reduce((s, f) => s + f.lat, 0) / src.length;
+}
+
+function onSpinPointerDown() { spinPaused = true; }
+function onSpinPointerUp() {
+    const pov = globe.pointOfView();
+    spinLng = pov.lng;
+    spinCurrentLat = pov.lat;
+    spinTargetLat = pov.lat;
+    spinRawTargetLat = centroidLatNear(spinLng);
+    spinPaused = false;
+}
+
+function doSpinFrame() {
+    if (!autopilotSpinning) return;
+    if (!spinPaused) {
+        spinLng = (spinLng + 0.07) % 360;
+        // Ease the raw centroid into a smooth intermediate target, then
+        // aggressively drive the camera toward that smoothed target.
+        spinTargetLat += (spinRawTargetLat - spinTargetLat) * 0.025;
+        spinCurrentLat += (spinTargetLat - spinCurrentLat) * 0.022;
+        globe.pointOfView({ lat: spinCurrentLat, lng: spinLng, altitude: 2.0 });
+    }
+    spinRaf = requestAnimationFrame(doSpinFrame);
+}
+
+function startManualSpin() {
+    if (spinRaf) return;
+    const pov = globe.pointOfView();
+    spinLng = pov.lng;
+    spinCurrentLat = pov.lat;
+    spinRawTargetLat = centroidLatNear(spinLng);
+    spinTargetLat = spinRawTargetLat;
+    globe.controls().autoRotate = false;
+    spinLatTimer = setInterval(() => { spinRawTargetLat = centroidLatNear(spinLng); }, 1500);
+    globe.renderer().domElement.addEventListener('pointerdown', onSpinPointerDown);
+    window.addEventListener('pointerup', onSpinPointerUp);
+    doSpinFrame();
+}
+
+function stopManualSpin() {
+    cancelAnimationFrame(spinRaf);
+    spinRaf = null;
+    clearInterval(spinLatTimer);
+    spinLatTimer = null;
+    spinPaused = false;
+    globe.renderer().domElement.removeEventListener('pointerdown', onSpinPointerDown);
+    window.removeEventListener('pointerup', onSpinPointerUp);
+}
 
 function autopilotStep() {
     const flights = globe.objectsData() || [];
@@ -633,9 +704,17 @@ function autopilotStep() {
         (f) => airports[f.origin] && airports[f.destination]
     );
     if (!eligible.length) {
+        if (heatmapEnabled && !liveTrafficEnabled) {
+            if (!autopilotSpinning) {
+                autopilotSpinning = true;
+                startManualSpin();
+            }
+        }
         autopilotTimeout = setTimeout(autopilotStep, 3000);
         return;
     }
+    autopilotSpinning = false;
+    stopManualSpin();
 
     const flight = eligible[Math.floor(Math.random() * eligible.length)];
     selectFlight(flight);

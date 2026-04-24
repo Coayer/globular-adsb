@@ -1,5 +1,6 @@
 """Upload pipeline artifacts to the Cloudflare R2 (S3-compatible) assets bucket."""
 
+import logging
 import mimetypes
 from pathlib import Path
 
@@ -7,6 +8,8 @@ import boto3
 from botocore.config import Config
 
 from globular_adsb import config
+
+log = logging.getLogger(__name__)
 
 
 def _client():
@@ -22,7 +25,7 @@ def _client():
 
 def upload_file(local_path: Path, key: str) -> None:
     content_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
-    print(f"Uploading {local_path} → s3://{config.R2_BUCKET}/{key}")
+    log.info("Uploading %s → s3://%s/%s", local_path, config.R2_BUCKET, key)
     _client().upload_file(
         str(local_path),
         config.R2_BUCKET,
