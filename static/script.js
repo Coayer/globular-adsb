@@ -295,25 +295,18 @@ function selectFlight(flight) {
 globe.onObjectClick(selectFlight);
 
 // Load day/night textures and apply shader
-Promise.all([
-    new TextureLoader().loadAsync(`${ASSETS_BASE}/daymap.webp`),
-    new TextureLoader().loadAsync(`${ASSETS_BASE}/nightmap.webp`),
-    new TextureLoader().loadAsync(
-        "//cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg"
-    ),
-    new TextureLoader().loadAsync(`${ASSETS_BASE}/bordermap.webp`),
-]).then(([dayTexture, nightTexture, darkTexture, bordermapTexture]) => {
+new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) => {
     const canvas1x1 = document.createElement("canvas");
     canvas1x1.width = canvas1x1.height = 1;
     const blankTexture = new THREE.CanvasTexture(canvas1x1);
 
     const material = new ShaderMaterial({
         uniforms: {
-            dayTexture: { value: dayTexture },
-            nightTexture: { value: nightTexture },
+            dayTexture: { value: blankTexture },
+            nightTexture: { value: blankTexture },
             darkTexture: { value: darkTexture },
             heatmapTexture: { value: blankTexture },
-            bordermapTexture: { value: bordermapTexture },
+            bordermapTexture: { value: blankTexture },
             sunPosition: { value: new Vector2() },
             globeRotation: { value: new Vector2() },
             heatmapMode: { value: 0.0 },
@@ -463,7 +456,16 @@ Promise.all([
         globe.objectsData(liveTrafficEnabled ? allFlights : []);
     });
 
+    let bordermapTexture = null;
     document.getElementById("bordermap-toggle").addEventListener("change", (e) => {
+        if (e.target.checked && !bordermapTexture) {
+            new TextureLoader().loadAsync(`${ASSETS_BASE}/bordermap.webp`).then(tex => {
+                bordermapTexture = tex;
+                material.uniforms.bordermapTexture.value = tex;
+                material.uniforms.bordermapEnabled.value = 1.0;
+            });
+            return;
+        }
         material.uniforms.bordermapEnabled.value = e.target.checked ? 1.0 : 0.0;
     });
 
@@ -509,6 +511,15 @@ Promise.all([
         .backgroundImageUrl(
             "//cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png"
         );
+
+    // Background-load day/night textures for when heatmap is disabled
+    Promise.all([
+        new TextureLoader().loadAsync(`${ASSETS_BASE}/daymap.webp`),
+        new TextureLoader().loadAsync(`${ASSETS_BASE}/nightmap.webp`),
+    ]).then(([dayTex, nightTex]) => {
+        material.uniforms.dayTexture.value = dayTex;
+        material.uniforms.nightTexture.value = nightTex;
+    });
 
     // Animation loop
     const animate = () => {
