@@ -36,8 +36,9 @@ def upload_file(local_path: Path, key: str) -> None:
 
 def upload_assets(dist_dir: Path, airports_csv: Path) -> None:
     upload_file(dist_dir / "flights.json", "flights.json")
-    for heatmap in sorted((dist_dir / "heatmaps").glob("heatmap_*.webp")):
-        upload_file(heatmap, f"heatmaps/{heatmap.name}")
+    heatmap = dist_dir / "heatmaps" / "heatmap_last24h.webp"
+    if heatmap.exists():
+        upload_file(heatmap, "heatmaps/heatmap_last24h.webp")
     video = dist_dir / "heatmaps" / "heatmap_animation.webm"
     if video.exists():
         upload_file(video, "heatmaps/heatmap_animation.webm")

@@ -16,5 +16,6 @@ R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY", "")
 R2_SECRET_KEY = os.getenv("R2_SECRET_KEY", "")
 R2_BUCKET = os.getenv("R2_BUCKET", "globular-adsb")
 
-SCHEDULE_INTERVAL_MINUTES = int(os.getenv("SCHEDULE_INTERVAL_MINUTES", "15"))
+FETCH_INTERVAL_MINUTES = int(os.getenv("FETCH_INTERVAL_MINUTES", "15"))
+RENDER_INTERVAL_MINUTES = int(os.getenv("RENDER_INTERVAL_MINUTES", "60"))
 DEV_PORT = int(os.getenv("DEV_PORT", "8080"))

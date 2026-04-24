@@ -13,10 +13,13 @@ _LOG_FORMAT = "%(asctime)s  %(levelname)-8s  %(name)s — %(message)s"
 _LOG_DATE = "%Y-%m-%d %H:%M:%S"
 
 
-def run() -> None:
+def run_fetch() -> None:
     log.info("=== fetch flights ===")
     flights_mod.run(config.ARCHIVE_DIR, config.DIST_DIR, config.AIRPORTS_CSV)
+    log.info("Fetch complete.")
 
+
+def run_render() -> None:
     log.info("=== generate heatmap ===")
     if heatmap_mod.needs_regeneration(config.DIST_DIR / "heatmaps"):
         heatmap_mod.run(config.ARCHIVE_DIR, config.AIRPORTS_CSV, config.DIST_DIR / "heatmaps")
@@ -29,12 +32,13 @@ def run() -> None:
     else:
         log.warning("R2 credentials not set, skipping upload.")
 
-    log.info("Pipeline complete.")
+    log.info("Render+upload complete.")
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT, datefmt=_LOG_DATE)
-    run()
+    run_fetch()
+    run_render()
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ WIDTH = 8192
 HEIGHT = 4096
 WINDOW_HOURS = 12
 STEP_HOURS = 0.5
-TOTAL_HOURS = 60
+TOTAL_HOURS = 84
 DILATION_RADIUS = 2
 QUALITY_HIGH = 90
 QUALITY_LOW = 100
@@ -120,6 +120,9 @@ def _expected_frame_paths(output_dir: Path) -> set[Path]:
 
 
 def needs_regeneration(output_dir: Path, interval_hours: float = STEP_HOURS) -> bool:
+    if not (output_dir / "heatmap_animation.webm").exists():
+        return True
+
     expected = _expected_frame_paths(output_dir)
     existing = set(output_dir.glob("heatmap_*.webp"))
 
@@ -277,7 +280,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     return outputs
 
 
-def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 10) -> None:
+def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 20) -> None:
     """Stitch slider frames into a WebM/VP9 video with alpha for globe VideoTexture playback."""
     max_n = TOTAL_HOURS - WINDOW_HOURS
     frame_paths = []
@@ -310,7 +313,7 @@ def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 10) -
             "-i",
             str(concat_list),
             "-vf",
-            "scale=2048:1024",
+            "scale=8192:4096",
             "-c:v",
             "libvpx-vp9",
             "-pix_fmt",
