@@ -1,0 +1,14 @@
+name = "globular-adsb-worker"
+compatibility_date = "2026-04-24"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./static"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "globular-adsb"
+
+[[routes]]
+pattern = "globular-adsb.copey.dev"
+custom_domain = true

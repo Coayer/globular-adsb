@@ -298,12 +298,12 @@ globe.onObjectClick(selectFlight);
 
 // Load day/night textures and apply shader
 Promise.all([
-    new TextureLoader().loadAsync("/daymap.webp"),
-    new TextureLoader().loadAsync("/nightmap.webp"),
+    new TextureLoader().loadAsync(`${ASSETS_BASE}/daymap.webp`),
+    new TextureLoader().loadAsync(`${ASSETS_BASE}/nightmap.webp`),
     new TextureLoader().loadAsync(
         "//cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg"
     ),
-    new TextureLoader().loadAsync("/bordermap.webp"),
+    new TextureLoader().loadAsync(`${ASSETS_BASE}/bordermap.webp`),
 ]).then(([dayTexture, nightTexture, darkTexture, bordermapTexture]) => {
     const canvas1x1 = document.createElement("canvas");
     canvas1x1.width = canvas1x1.height = 1;

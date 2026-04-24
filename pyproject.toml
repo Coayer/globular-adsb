@@ -19,6 +19,7 @@ globular-pipeline  = "globular_adsb.pipeline:main"
 globular-scheduler = "globular_adsb.scheduler:main"
 globular-dev       = "globular_adsb.dev_server:main"
 globular-generate-heatmap = "globular_adsb.generate:main"
+globular-upload        = "globular_adsb.upload_cmd:main"
 
 [project.optional-dependencies]
 dev = [

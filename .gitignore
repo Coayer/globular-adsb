@@ -6,7 +6,9 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
-dist/
+
+dist/heatmaps/
+dist/flights.json
 
 # Generated data
 archive/
@@ -14,3 +16,6 @@ data/
 
 # uv
 uv.lock
+
+# wrangler
+.wrangler/

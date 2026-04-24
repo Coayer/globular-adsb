@@ -14,7 +14,7 @@ ASSETS_BUCKET_URL = "https://globular-adsb-assets.copey.dev"
 R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
 R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY", "")
 R2_SECRET_KEY = os.getenv("R2_SECRET_KEY", "")
-R2_BUCKET = os.getenv("R2_BUCKET", "globular-adsb-assets")
+R2_BUCKET = os.getenv("R2_BUCKET", "globular-adsb")
 
 SCHEDULE_INTERVAL_MINUTES = int(os.getenv("SCHEDULE_INTERVAL_MINUTES", "15"))
 DEV_PORT = int(os.getenv("DEV_PORT", "8080"))
