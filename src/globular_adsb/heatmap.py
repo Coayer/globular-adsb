@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import subprocess
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -24,7 +25,7 @@ STEP_HOURS = 0.5
 TOTAL_HOURS = 60
 DILATION_RADIUS = 2
 QUALITY_HIGH = 90
-QUALITY_LOW = 30
+QUALITY_LOW = 100
 
 
 def load_flights_window(
@@ -71,7 +72,9 @@ def build_heatmap(
         x, y = latlon_to_xy(f["latitude"], f["longitude"])
         density[max(0, y - r) : y + r + 1, max(0, x - r) : x + r + 1] += w
 
-    log.info("%d weighted, %d missing/short-haul skipped", len(flights) - skipped, skipped)
+    log.info(
+        "%d weighted, %d missing/short-haul skipped", len(flights) - skipped, skipped
+    )
     return density
 
 
@@ -228,7 +231,9 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         not last24h_path.exists() or last24h_path.stat().st_mtime < midnight_ts
     )
     if regen_last24h and last24h_path.exists():
-        log.info("heatmap_last24h.webp pre-dates midnight — regenerating for new calendar day")
+        log.info(
+            "heatmap_last24h.webp pre-dates midnight — regenerating for new calendar day"
+        )
 
     # Slider frames: generate missing ones; full regeneration only when interval elapsed.
     slider_tasks = [t for t in tasks if t[2] != last24h_path]
@@ -241,7 +246,10 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         tasks_to_run.extend(t for t in tasks if t[2] == last24h_path)
 
     if missing_sliders:
-        log.info("%d slider frame(s) missing — generating missing frames", len(missing_sliders))
+        log.info(
+            "%d slider frame(s) missing — generating missing frames",
+            len(missing_sliders),
+        )
         tasks_to_run.extend(t for t in slider_tasks if t[2] in missing_sliders)
     elif existing_sliders:
         newest_mtime = max(p.stat().st_mtime for p in existing_sliders)
@@ -250,8 +258,12 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     else:
         tasks_to_run.extend(slider_tasks)
 
+    video_path = output_dir / "heatmap_animation.webm"
+
     if not tasks_to_run:
         log.info("All frames up to date.")
+        if not video_path.exists():
+            encode_animation_video(output_dir, video_path)
         return []
 
     log.info("Generating %d frame(s) …", len(tasks_to_run))
@@ -260,7 +272,64 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         futures = {executor.submit(run_window, *t): t[2] for t in tasks_to_run}
         for future in as_completed(futures):
             outputs.append(future.result())
+
+    encode_animation_video(output_dir, video_path)
     return outputs
+
+
+def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 10) -> None:
+    """Stitch slider frames into a WebM/VP9 video with alpha for globe VideoTexture playback."""
+    max_n = TOTAL_HOURS - WINDOW_HOURS
+    frame_paths = []
+    n = 1.0
+    while n <= max_n + 1e-9:
+        n_r = round(n, 10)
+        p = output_dir / f"heatmap_{n_r:g}h.webp"
+        if p.exists():
+            frame_paths.append(p)
+        n = round(n + STEP_HOURS, 10)
+
+    if not frame_paths:
+        log.warning("No slider frames found — skipping animation video")
+        return
+
+    concat_list = output_dir / "_concat.txt"
+    try:
+        with open(concat_list, "w") as f:
+            for path in frame_paths:
+                f.write(f"file '{path.resolve()}'\n")
+                f.write(f"duration {1 / fps:.4f}\n")
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_list),
+            "-vf",
+            "scale=2048:1024",
+            "-c:v",
+            "libvpx-vp9",
+            "-pix_fmt",
+            "yuva420p",
+            "-auto-alt-ref",
+            "0",
+            "-crf",
+            "33",
+            "-b:v",
+            "0",
+            str(output_path),
+        ]
+        log.info(
+            "Encoding animation video (%d frames @ %dfps) …", len(frame_paths), fps
+        )
+        subprocess.run(cmd, check=True)
+        log.info("Saved %s", output_path)
+    finally:
+        concat_list.unlink(missing_ok=True)
 
 
 def main() -> None:

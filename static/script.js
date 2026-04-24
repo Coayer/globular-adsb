@@ -12,13 +12,11 @@ import * as solar from "https://esm.sh/solar-calculator";
 import * as THREE from "https://esm.sh/three";
 
 // Constants
-const FRAME_RATE_SCALE = 1 / 60;
 const ASSETS_BASE = location.hostname !== 'localhost'
     ? 'https://globular-adsb-assets.copey.dev'
     : '';
 const EARTH_RADIUS_KM = 6371;
 const FEET_TO_KM = 0.0003048;
-const ANIMATION_STEP = 0.5;
 
 // Day/Night blending shader
 const dayNightShader = {
@@ -325,16 +323,21 @@ Promise.all([
         fragmentShader: dayNightShader.fragmentShader,
     });
 
-    let loadedHeatmapOffset = -1;
-    let currentAnimationOffset = 1;
-    let allTexturesPreloaded = false;
-    const heatmapTextureCache = new Map();
+    // Video element for animation — src is set after user downloads
+    const animationVideo = document.createElement('video');
+    animationVideo.loop = true;
+    animationVideo.muted = true;
+    const animationVideoTexture = new THREE.VideoTexture(animationVideo);
+    animationVideoTexture.minFilter = THREE.LinearFilter;
+    animationVideoTexture.magFilter = THREE.LinearFilter;
 
     const heatmapExtra = document.getElementById("heatmap-extra");
-    const heatmapTimeSlider = document.getElementById("heatmap-time");
-    const heatmapTimeLabel = document.getElementById("heatmap-time-number");
-    const heatmapTimeLabelOuter = document.getElementById("heatmap-time-label");
-    const heatmapSliderDate = document.getElementById("heatmap-slider-date");
+    const heatmapProgress = document.getElementById("heatmap-progress");
+    const progressFill = document.getElementById("heatmap-progress-fill");
+    const progressCount = document.getElementById("heatmap-progress-count");
+    const videoDownloadBtn = document.getElementById("video-download-btn");
+    const videoPlayBtn = document.getElementById("video-play-btn");
+    const videoTimeSlider = document.getElementById("heatmap-time");
     const last24hBtn = document.getElementById("last24h-btn");
 
     const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -342,197 +345,100 @@ Promise.all([
     yday.setUTCDate(yday.getUTCDate() - 1);
     last24hBtn.textContent = `${String(yday.getUTCDate()).padStart(2,'0')}${months[yday.getUTCMonth()]}${yday.getUTCFullYear()}`;
 
-    function offsetToZ(offset) {
-        return `${String(23 - ((offset - 1) % 24)).padStart(2, '0')}00`;
-    }
-
-    function dateForOffset(offset) {
-        const daysBack = Math.floor((offset - 1) / 24) + 1;
-        const d = new Date();
-        d.setUTCDate(d.getUTCDate() - daysBack);
-        return `${String(d.getUTCDate()).padStart(2, '0')}${months[d.getUTCMonth()]}`;
-    }
-
-    heatmapSliderDate.textContent = dateForOffset(1);
-    const heatmapProgress = document.getElementById("heatmap-progress");
-    const progressFill = document.getElementById("heatmap-progress-fill");
-    const progressCount = document.getElementById("heatmap-progress-count");
-    const heatmapDownloadBtn = document.getElementById("heatmap-download-btn");
-    let downloadApproved = false;
-
-    function flashDownloadBtn() {
-        heatmapDownloadBtn.classList.remove("flash");
-        void heatmapDownloadBtn.offsetWidth;
-        heatmapDownloadBtn.classList.add("flash");
-    }
-
-    heatmapDownloadBtn.addEventListener("click", () => {
-        downloadApproved = true;
-        heatmapDownloadBtn.classList.remove("visible");
-        heatmapTimeSlider.style.display = "";
-        heatmapTimeLabelOuter.style.display = "";
-        heatmapTimeSlider.classList.add("greyed");
-        heatmapTimeLabelOuter.classList.add("greyed");
-        preloadAllTextures();
-    });
-
-    function preloadAllTextures(onComplete) {
-        if (allTexturesPreloaded) {
-            onComplete?.();
+    // Load heatmap_last24h.webp onto the globe
+    let last24hTexture = null;
+    function loadLast24h() {
+        if (last24hTexture) {
+            material.uniforms.heatmapTexture.value = last24hTexture;
             return;
         }
-        const sliderMax = parseInt(heatmapTimeSlider.max, 10);
-        const offsets = [];
-        for (let i = 0; i * 0.25 + 1 <= sliderMax; i++) offsets.push(i * 0.25 + 1);
-        offsets.push('last24h');
-        const total = offsets.length;
-        let loaded = 0;
-        let displayed = 0;
-
-        heatmapTimeSlider.style.display = 'none';
-        heatmapTimeLabelOuter.style.display = 'none';
-        heatmapProgress.style.display = 'flex';
-        progressFill.style.width = '0%';
-        progressCount.textContent = `0/${total}`;
-
-        function driveProgress() {
-            if (displayed >= loaded) return;
-            displayed++;
-            progressFill.style.width = `${(displayed / total) * 100}%`;
-            progressCount.textContent = `${displayed}/${total}`;
-            if (displayed === total) {
-                allTexturesPreloaded = true;
-                heatmapProgress.style.display = 'none';
-                heatmapTimeSlider.style.display = '';
-                heatmapTimeLabelOuter.style.display = '';
-                heatmapTimeSlider.classList.remove('greyed');
-                heatmapTimeLabelOuter.classList.remove('greyed');
-                onComplete?.();
-            } else {
-                requestAnimationFrame(driveProgress);
-            }
-        }
-
-        offsets.forEach(offset => {
-            const advance = () => {
-                loaded++;
-                if (loaded === displayed + 1) requestAnimationFrame(driveProgress);
-            };
-            fetchHeatmapTexture(offset).then(advance, advance);
-        });
-    }
-
-    function fetchHeatmapTexture(offset) {
-        const key = offset === 'last24h' ? 'last24h' : offset;
-        if (heatmapTextureCache.has(key)) return heatmapTextureCache.get(key);
-        const filename = offset === 'last24h' ? 'heatmap_last24h.webp' : `heatmap_${offset}h.webp`;
-        const url = `${ASSETS_BASE}/heatmaps/${filename}?t=${Math.floor(Date.now() / 3600000)}`;
-        const promise = fetch(url)
+        const url = `${ASSETS_BASE}/heatmaps/heatmap_last24h.webp?t=${Math.floor(Date.now() / 3600000)}`;
+        fetch(url)
             .then(r => r.blob())
             .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY' }))
             .then(bitmap => {
                 const tex = new THREE.CanvasTexture(bitmap);
                 tex.flipY = false;
                 globe.renderer().initTexture(tex);
-                return tex;
-            })
-            .catch(err => {
-                heatmapTextureCache.delete(key);
-                throw err;
+                last24hTexture = tex;
+                material.uniforms.heatmapTexture.value = tex;
             });
-        heatmapTextureCache.set(key, promise);
-        return promise;
-    }
-
-    function loadHeatmap(offset) {
-        if (offset === loadedHeatmapOffset) return;
-        fetchHeatmapTexture(offset).then(tex => {
-            loadedHeatmapOffset = offset;
-            material.uniforms.heatmapTexture.value = tex;
-        });
     }
 
     last24hBtn.addEventListener("click", () => {
         last24hBtn.classList.add("active");
-        heatmapTimeSlider.classList.remove("active");
-        if (heatmapAnimating) stopHeatmapAnimation();
-        loadHeatmap('last24h');
+        animationVideo.pause();
+        videoPlayBtn.textContent = '▶ PLAY';
+        videoTimeSlider.disabled = true;
+        loadLast24h();
         setLiveTrafficEnabled(true);
     });
 
-    heatmapTimeSlider.addEventListener("input", () => {
-        if (!downloadApproved) {
-            flashDownloadBtn();
-            return;
+    videoDownloadBtn.addEventListener("click", async () => {
+        videoDownloadBtn.style.display = 'none';
+        heatmapProgress.style.display = 'flex';
+        progressFill.style.width = '0%';
+        progressCount.textContent = '0%';
+
+        const url = `${ASSETS_BASE}/heatmaps/heatmap_animation.webm`;
+        const response = await fetch(url);
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : null;
+        const reader = response.body.getReader();
+        const chunks = [];
+        let received = 0;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            if (total) {
+                const pct = Math.round((received / total) * 100);
+                progressFill.style.width = `${pct}%`;
+                progressCount.textContent = `${pct}%`;
+            }
         }
-        const offset = parseInt(heatmapTimeSlider.value, 10);
-        currentAnimationOffset = offset;
-        heatmapTimeLabel.textContent = offsetToZ(offset);
-        heatmapSliderDate.textContent = dateForOffset(offset);
-        heatmapTimeSlider.classList.add("active");
+
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        animationVideo.src = URL.createObjectURL(blob);
+
+        await new Promise(resolve => {
+            animationVideo.addEventListener('loadedmetadata', resolve, { once: true });
+        });
+
+        heatmapProgress.style.display = 'none';
+        videoPlayBtn.style.display = 'inline-block';
+        videoTimeSlider.style.display = 'inline-block';
         last24hBtn.classList.remove("active");
+
+        material.uniforms.heatmapTexture.value = animationVideoTexture;
         setLiveTrafficEnabled(false);
-        if (heatmapEnabled) {
-            preloadAllTextures();
-            loadHeatmap(offset);
+        animationVideo.play();
+        videoPlayBtn.textContent = '⏸ PAUSE';
+    });
+
+    videoPlayBtn.addEventListener("click", () => {
+        if (animationVideo.paused) {
+            last24hBtn.classList.remove("active");
+            material.uniforms.heatmapTexture.value = animationVideoTexture;
+            setLiveTrafficEnabled(false);
+            if (videoTimeSlider.disabled) {
+                animationVideo.currentTime = 0;
+                videoTimeSlider.value = 0;
+            }
+            videoTimeSlider.disabled = false;
+            animationVideo.play();
+            videoPlayBtn.textContent = '⏸ PAUSE';
+        } else {
+            animationVideo.pause();
+            videoPlayBtn.textContent = '▶ PLAY';
         }
     });
 
-    function stopHeatmapAutopilot() {
-        if (autopilotHeatmapInterval !== null) {
-            clearInterval(autopilotHeatmapInterval);
-            autopilotHeatmapInterval = null;
-        }
-        globe.controls().autoRotate = false;
-        const sliderMax = parseInt(heatmapTimeSlider.max, 10);
-        const snapped = Math.min(sliderMax, Math.max(1, Math.round(currentAnimationOffset)));
-        currentAnimationOffset = snapped;
-        heatmapTimeSlider.value = snapped;
-        heatmapTimeSlider.classList.add("active");
-        heatmapTimeLabel.textContent = offsetToZ(snapped);
-        heatmapSliderDate.textContent = dateForOffset(snapped);
-        loadHeatmap(snapped);
-    }
-
-    const heatmapAnimateBtn = document.getElementById("heatmap-animate-btn");
-
-    function stopHeatmapAnimation() {
-        heatmapAnimating = false;
-        heatmapAnimateBtn.classList.remove("active");
-        heatmapAnimateBtn.textContent = "▶ ANIMATE";
-        stopHeatmapAutopilot();
-    }
-
-    heatmapAnimateBtn.addEventListener("click", () => {
-        if (!heatmapAnimating) {
-            if (!downloadApproved) {
-                flashDownloadBtn();
-                return;
-            }
-            heatmapAnimating = true;
-            heatmapAnimateBtn.classList.add("active");
-            heatmapAnimateBtn.textContent = "■ STOP";
-            last24hBtn.classList.remove("active");
-            heatmapTimeSlider.classList.remove("active");
-            setLiveTrafficEnabled(false);
-            const sliderMax = parseInt(heatmapTimeSlider.max, 10);
-            currentAnimationOffset = 1;
-            preloadAllTextures(() => {
-                if (!heatmapAnimating) return;
-                globe.controls().autoRotate = true;
-                globe.controls().autoRotateSpeed = 0.35;
-                autopilotHeatmapInterval = setInterval(() => {
-                    currentAnimationOffset += ANIMATION_STEP;
-                    if (currentAnimationOffset > sliderMax) currentAnimationOffset = 1;
-                    const wholeHour = Math.min(sliderMax, Math.max(1, Math.round(currentAnimationOffset)));
-                    heatmapTimeSlider.value = wholeHour;
-                    heatmapTimeLabel.textContent = offsetToZ(wholeHour);
-                    heatmapSliderDate.textContent = dateForOffset(wholeHour);
-                    loadHeatmap(currentAnimationOffset);
-                }, 100);
-            });
-        } else {
-            stopHeatmapAnimation();
+    videoTimeSlider.addEventListener("input", () => {
+        if (animationVideo.duration) {
+            animationVideo.currentTime = (parseInt(videoTimeSlider.value, 10) / 1000) * animationVideo.duration;
         }
     });
 
@@ -544,10 +450,11 @@ Promise.all([
 
     document.getElementById("heatmap-toggle").addEventListener("change", (e) => {
         if (e.target.checked && !last24hBtn.classList.contains("active")) {
-            if (heatmapAnimating) stopHeatmapAnimation();
+            animationVideo.pause();
+            videoPlayBtn.textContent = '▶ PLAY';
+            videoTimeSlider.disabled = true;
             last24hBtn.classList.add("active");
-            heatmapTimeSlider.classList.remove("active");
-            loadHeatmap('last24h');
+            loadLast24h();
             liveTrafficEnabled = true;
             globe.objectsData(allFlights);
             return;
@@ -576,19 +483,18 @@ Promise.all([
     document.getElementById("heatmap-enable-toggle").addEventListener("change", (e) => {
         heatmapEnabled = e.target.checked;
         if (!heatmapEnabled) {
-            if (heatmapAnimating) stopHeatmapAnimation();
+            animationVideo.pause();
+            videoPlayBtn.textContent = '▶ PLAY';
             heatmapExtra.classList.remove("visible");
             material.uniforms.heatmapMode.value = 0.0;
             material.uniforms.heatmapTexture.value = blankTexture;
-            loadedHeatmapOffset = -1;
             liveTrafficLabel.style.display = "none";
             setLiveTrafficEnabled(true);
         } else {
             heatmapExtra.classList.add("visible");
             material.uniforms.heatmapMode.value = 1.0;
             last24hBtn.classList.add("active");
-            heatmapTimeSlider.classList.remove("active");
-            loadHeatmap('last24h');
+            loadLast24h();
             liveTrafficLabel.style.display = "";
         }
     });
@@ -596,10 +502,7 @@ Promise.all([
     // Activate heatmap on startup
     last24hBtn.classList.add("active");
     material.uniforms.heatmapMode.value = 1.0;
-    loadHeatmap('last24h');
-    heatmapTimeSlider.style.display = 'none';
-    heatmapTimeLabelOuter.style.display = 'none';
-    heatmapDownloadBtn.classList.add('visible');
+    loadLast24h();
 
     globe
         .globeMaterial(material)
@@ -613,6 +516,9 @@ Promise.all([
         material.uniforms.sunPosition.value.set(...getSunPosition(now));
         const pov = globe.pointOfView();
         material.uniforms.globeRotation.value.set(pov.lng, pov.lat);
+        if (!animationVideo.paused && animationVideo.duration) {
+            videoTimeSlider.value = Math.round((animationVideo.currentTime / animationVideo.duration) * 1000);
+        }
         requestAnimationFrame(animate);
     };
 
@@ -626,8 +532,6 @@ window.addEventListener("resize", () => {
 
 // Autopilot: select a random flight and pan from origin to destination
 let autopilotTimeout = null;
-let autopilotHeatmapInterval = null;
-let heatmapAnimating = false;
 let autopilotSpinning = false;
 
 // --- Autopilot: heatmap-only spin mode ---
@@ -743,4 +647,3 @@ function autopilotStep() {
         autopilotTimeout = setTimeout(autopilotStep, panDuration + 1000);
     }, 2500);
 }
-
