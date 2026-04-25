@@ -331,7 +331,31 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
     const videoDownloadBtn = document.getElementById("video-download-btn");
     const videoPlayBtn = document.getElementById("video-play-btn");
     const videoTimeSlider = document.getElementById("heatmap-time");
+    const heatmapSliderWrap = document.getElementById("heatmap-slider-wrap");
+    const sliderDayTicks = document.getElementById("slider-day-ticks");
     const last24hBtn = document.getElementById("last24h-btn");
+
+    // Day boundary ticks: midnight occurs at n = 1 + k*24 (k=0,1,2) in the frame sequence.
+    // Slider position = (n - 1) / (MAX_N - 1) where MAX_N = TOTAL_HOURS - WINDOW_HOURS = 72.
+    function buildDayTicks() {
+        sliderDayTicks.innerHTML = '';
+        const tickMonths = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+        const todayMidnight = new Date();
+        todayMidnight.setUTCHours(0, 0, 0, 0);
+        const MAX_N = 72;
+        for (let k = 1; k <= 2; k++) {
+            const n = 1 + k * 24;
+            if (n > MAX_N) break;
+            const pct = (n - 1) / (MAX_N - 1) * 100;
+            const midnight = new Date(todayMidnight - (k + 1) * 86400000);
+            const label = `${String(midnight.getUTCDate()).padStart(2,'0')}${tickMonths[midnight.getUTCMonth()]}`;
+            const tick = document.createElement('div');
+            tick.className = 'slider-day-tick';
+            tick.style.left = `${pct}%`;
+            tick.innerHTML = `<div class="slider-day-tick-label">${label}</div><div class="slider-day-tick-line"></div>`;
+            sliderDayTicks.appendChild(tick);
+        }
+    }
 
     const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
     const yday = new Date();
@@ -348,7 +372,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         const url = `${ASSETS_BASE}/heatmaps/heatmap_last24h.webp?t=${Math.floor(Date.now() / 3600000)}`;
         fetch(url)
             .then(r => r.blob())
-            .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY' }))
+            .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none' }))
             .then(bitmap => {
                 const tex = new THREE.CanvasTexture(bitmap);
                 tex.flipY = false;
@@ -402,7 +426,8 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
 
         heatmapProgress.style.display = 'none';
         videoPlayBtn.style.display = 'inline-block';
-        videoTimeSlider.style.display = 'inline-block';
+        buildDayTicks();
+        heatmapSliderWrap.classList.add('visible');
         last24hBtn.classList.remove("active");
 
         material.uniforms.heatmapTexture.value = animationVideoTexture;
