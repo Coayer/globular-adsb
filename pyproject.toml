@@ -12,6 +12,7 @@ dependencies = [
     "boto3",
     "schedule",
     "beautifulsoup4>=4.14.3",
+    "flask",
 ]
 
 [project.scripts]
