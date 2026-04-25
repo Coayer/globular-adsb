@@ -24,7 +24,7 @@ def run_render() -> None:
     if heatmap_mod.needs_regeneration(config.DIST_DIR / "heatmaps"):
         heatmap_mod.run(config.ARCHIVE_DIR, config.AIRPORTS_CSV, config.DIST_DIR / "heatmaps")
     else:
-        log.info("Skipping — frames up to date (interval %g min).", heatmap_mod.STEP_HOURS * 60)
+        log.info("Skipping — frames up to date until next midnight.")
 
     log.info("=== upload assets ===")
     if config.R2_ENDPOINT and config.R2_ACCESS_KEY and config.R2_SECRET_KEY:

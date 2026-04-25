@@ -18,14 +18,17 @@ from globular_adsb.flights import (
 
 log = logging.getLogger(__name__)
 
-WIDTH = 8192
-HEIGHT = 4096
+FRAME_WIDTH = 8192
+FRAME_HEIGHT = 4096
 WINDOW_HOURS = 12
 STEP_HOURS = 0.5
 TOTAL_HOURS = 84
 DILATION_RADIUS = 2
-QUALITY_HIGH = 90
-QUALITY_LOW = 100
+QUALITY_STATIC = 90
+QUALITY_VIDEO_SOURCE = 85
+VIDEO_WIDTH = 8192
+VIDEO_HEIGHT = 4096
+VIDEO_CRF = 33
 
 
 def load_flights_window(
@@ -49,15 +52,15 @@ def load_flights_window(
 
 
 def latlon_to_xy(lat: float, lon: float) -> tuple[int, int]:
-    x = int((lon + 180) / 360 * WIDTH)
-    y = int((90 - lat) / 180 * HEIGHT)
-    return max(0, min(WIDTH - 1, x)), max(0, min(HEIGHT - 1, y))
+    x = int((lon + 180) / 360 * FRAME_WIDTH)
+    y = int((90 - lat) / 180 * FRAME_HEIGHT)
+    return max(0, min(FRAME_WIDTH - 1, x)), max(0, min(FRAME_HEIGHT - 1, y))
 
 
 def build_heatmap(
     flights: list[dict], airports: dict[str, tuple[float, float]]
 ) -> np.ndarray:
-    density = np.zeros((HEIGHT, WIDTH), dtype=np.float32)
+    density = np.zeros((FRAME_HEIGHT, FRAME_WIDTH), dtype=np.float32)
     skipped = 0
     r = DILATION_RADIUS
     for f in flights:
@@ -100,7 +103,7 @@ def density_to_rgba(density: np.ndarray) -> np.ndarray:
 
     rgb = colours[idx] + frac * (colours[np.clip(idx + 1, 0, 3)] - colours[idx])
 
-    rgba = np.zeros((HEIGHT, WIDTH, 4), dtype=np.uint8)
+    rgba = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 4), dtype=np.uint8)
     rgba[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
     rgba[..., 3] = np.clip(normalized**0.5 * 255, 0, 255).astype(
         np.uint8
@@ -119,7 +122,7 @@ def _expected_frame_paths(output_dir: Path) -> set[Path]:
     return paths
 
 
-def needs_regeneration(output_dir: Path, interval_hours: float = STEP_HOURS) -> bool:
+def needs_regeneration(output_dir: Path) -> bool:
     if not (output_dir / "heatmap_animation.webm").exists():
         return True
 
@@ -143,7 +146,7 @@ def needs_regeneration(output_dir: Path, interval_hours: float = STEP_HOURS) -> 
     slider_frames = existing - {last24h}
     if slider_frames:
         newest_mtime = max(p.stat().st_mtime for p in slider_frames)
-        if (time.time() - newest_mtime) >= interval_hours * 3600:
+        if newest_mtime < midnight_ts:
             return True
 
     return False
@@ -155,7 +158,7 @@ def run_window(
     output_path: Path,
     start_hours: float,
     end_hours: float,
-    quality: int = QUALITY_LOW,
+    quality: int = QUALITY_VIDEO_SOURCE,
 ) -> Path:
     # Subprocess workers don't inherit handlers from the parent process.
     from globular_adsb.pipeline import _LOG_DATE, _LOG_FORMAT
@@ -178,7 +181,7 @@ def run_window(
 
     output_path.parent.mkdir(exist_ok=True)
     Image.fromarray(rgba, mode="RGBA").save(output_path, format="WEBP", quality=quality)
-    log.info("Saved %s  (%dx%d)", output_path, WIDTH, HEIGHT)
+    log.info("Saved %s  (%dx%d)", output_path, FRAME_WIDTH, FRAME_HEIGHT)
     return output_path
 
 
@@ -199,7 +202,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
             last24h_path,
             hours_since_midnight,
             hours_since_midnight + 24.0,
-            QUALITY_HIGH,
+            QUALITY_STATIC,
         ),
     ]
     # Slider positions 1–(TOTAL_HOURS-WINDOW_HOURS) in STEP_HOURS increments.
@@ -216,7 +219,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
                 output_dir / f"heatmap_{n_r:g}h.webp",
                 start_h,
                 start_h + WINDOW_HOURS,
-                QUALITY_LOW,
+                QUALITY_VIDEO_SOURCE,
             )
         )
         n = round(n + STEP_HOURS, 10)
@@ -254,11 +257,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
             len(missing_sliders),
         )
         tasks_to_run.extend(t for t in slider_tasks if t[2] in missing_sliders)
-    elif existing_sliders:
-        newest_mtime = max(p.stat().st_mtime for p in existing_sliders)
-        if (time.time() - newest_mtime) >= STEP_HOURS * 3600:
-            tasks_to_run.extend(slider_tasks)
-    else:
+    elif regen_last24h:
         tasks_to_run.extend(slider_tasks)
 
     video_path = output_dir / "heatmap_animation.webm"
@@ -313,7 +312,7 @@ def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 20) -
             "-i",
             str(concat_list),
             "-vf",
-            "scale=8192:4096",
+            f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}",
             "-c:v",
             "libvpx-vp9",
             "-pix_fmt",
@@ -321,7 +320,7 @@ def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 20) -
             "-auto-alt-ref",
             "0",
             "-crf",
-            "33",
+            str(VIDEO_CRF),
             "-b:v",
             "0",
             str(output_path),
