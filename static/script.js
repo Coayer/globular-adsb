@@ -234,7 +234,7 @@ function refreshFlights() {
         .then((data) => {
             if (data.timestamp) {
                 const ts = new Date(data.timestamp * 1000);
-                timeDisplay.textContent = `Data last updated: ${String(ts.getUTCHours()).padStart(2, "0")}:${String(ts.getUTCMinutes()).padStart(2, "0")} UTC`;
+                timeDisplay.textContent = `Traffic updated: ${String(ts.getHours()).padStart(2, "0")}:${String(ts.getMinutes()).padStart(2, "0")}`;
             }
             allFlights = data.flights.map((f) => ({
                 lat: f.latitude,
@@ -388,7 +388,6 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         videoPlayBtn.textContent = '▶ PLAY';
         videoTimeSlider.disabled = true;
         loadLast24h();
-        setLiveTrafficEnabled(true);
     });
 
     videoDownloadBtn.addEventListener("click", async () => {
@@ -458,6 +457,10 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         if (animationVideo.duration) {
             animationVideo.currentTime = (parseInt(videoTimeSlider.value, 10) / 1000) * animationVideo.duration;
         }
+    });
+
+    animationVideo.addEventListener('seeked', () => {
+        animationVideoTexture.needsUpdate = true;
     });
 
     function setLiveTrafficEnabled(enabled) {

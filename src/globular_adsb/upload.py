@@ -24,7 +24,9 @@ def _client():
 
 
 def upload_file(local_path: Path, key: str) -> None:
-    content_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
+    content_type = (
+        mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
+    )
     log.info("Uploading %s → s3://%s/%s", local_path, config.R2_BUCKET, key)
     _client().upload_file(
         str(local_path),
@@ -42,4 +44,4 @@ def upload_assets(dist_dir: Path, airports_csv: Path) -> None:
     video = dist_dir / "heatmaps" / "heatmap_animation.webm"
     if video.exists():
         upload_file(video, "heatmaps/heatmap_animation.webm")
-    upload_file(airports_csv, "airports.csv")
+    # upload_file(airports_csv, "airports.csv")
