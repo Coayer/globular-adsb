@@ -29,6 +29,9 @@ QUALITY_VIDEO_SOURCE = 85
 VIDEO_WIDTH = 8192
 VIDEO_HEIGHT = 4096
 VIDEO_CRF = 33
+MOBILE_VIDEO_WIDTH = 1920
+MOBILE_VIDEO_HEIGHT = 960
+MOBILE_VIDEO_CRF = 28
 
 
 def load_flights_window(
@@ -124,6 +127,8 @@ def _expected_frame_paths(output_dir: Path) -> set[Path]:
 
 def needs_regeneration(output_dir: Path) -> bool:
     if not (output_dir / "heatmap_animation.webm").exists():
+        return True
+    if not (output_dir / "heatmap_animation.mp4").exists():
         return True
 
     expected = _expected_frame_paths(output_dir)
@@ -265,7 +270,9 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     if not tasks_to_run:
         log.info("All frames up to date.")
         if not video_path.exists():
-            encode_animation_video(output_dir, video_path)
+            encode_animation_video(
+                output_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
+            )
         return []
 
     log.info("Generating %d frame(s) …", len(tasks_to_run))
@@ -275,12 +282,22 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         for future in as_completed(futures):
             outputs.append(future.result())
 
-    encode_animation_video(output_dir, video_path)
+    encode_animation_video(
+        output_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
+    )
     return outputs
 
 
-def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 20) -> None:
-    """Stitch slider frames into a WebM/VP9 video with alpha for globe VideoTexture playback."""
+def encode_animation_video(
+    output_dir: Path,
+    output_path: Path,
+    fps: int = 20,
+    *,
+    webm: bool = True,
+    h264: bool = True,
+    darkmap_path: Path | None = None,
+) -> None:
+    """Stitch slider frames into VP9/WebM (with alpha) and H.264/MP4 (darkmap composited)."""
     max_n = TOTAL_HOURS - WINDOW_HOURS
     frame_paths = []
     n = 1.0
@@ -302,34 +319,98 @@ def encode_animation_video(output_dir: Path, output_path: Path, fps: int = 20) -
                 f.write(f"file '{path.resolve()}'\n")
                 f.write(f"duration {1 / fps:.4f}\n")
 
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(concat_list),
-            "-vf",
-            f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}",
-            "-c:v",
-            "libvpx-vp9",
-            "-pix_fmt",
-            "yuva420p",
-            "-auto-alt-ref",
-            "0",
-            "-crf",
-            str(VIDEO_CRF),
-            "-b:v",
-            "0",
-            str(output_path),
-        ]
         log.info(
             "Encoding animation video (%d frames @ %dfps) …", len(frame_paths), fps
         )
-        subprocess.run(cmd, check=True)
-        log.info("Saved %s", output_path)
+
+        if webm:
+            if darkmap_path is None or not darkmap_path.exists():
+                log.warning(
+                    "darkmap_path not provided or missing — skipping H.264 encode"
+                )
+            else:
+                webm_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(concat_list),
+                    "-loop",
+                    "1",
+                    "-i",
+                    str(darkmap_path),
+                    "-filter_complex",
+                    f"[0:v]fps={str(fps)},scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},fps=60[fg];"
+                    f"[1:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}[bg];"
+                    "[bg][fg]overlay=shortest=1:format=auto[out]",
+                    "-map",
+                    "[out]",
+                    "-c:v",
+                    "libvpx-vp9",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-crf",
+                    str(VIDEO_CRF),
+                    "-b:v",
+                    "0",
+                    "-r",
+                    "60",
+                    "-vsync",
+                    "cfr",
+                    "-shortest",
+                    "-deadline",
+                    "good",
+                    "-cpu-used",
+                    "2",
+                    str(output_path),
+                ]
+                subprocess.run(webm_cmd, check=True)
+                log.info("Saved %s", output_path)
+
+        if h264:
+            if darkmap_path is None or not darkmap_path.exists():
+                log.warning(
+                    "darkmap_path not provided or missing — skipping H.264 encode"
+                )
+            else:
+                mp4_path = output_path.with_suffix(".mp4")
+                h264_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(concat_list),
+                    "-loop",
+                    "1",
+                    "-i",
+                    str(darkmap_path),
+                    "-filter_complex",
+                    f"[0:v]fps={fps},scale={MOBILE_VIDEO_WIDTH}:{MOBILE_VIDEO_HEIGHT}[fg];"
+                    f"[1:v]scale={MOBILE_VIDEO_WIDTH}:{MOBILE_VIDEO_HEIGHT}[bg];"
+                    "[bg][fg]overlay=shortest=1:format=auto[out]",
+                    "-map",
+                    "[out]",
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-crf",
+                    str(MOBILE_VIDEO_CRF),
+                    "-vsync",
+                    "cfr",
+                    "-r",
+                    str(fps),
+                    "-shortest",
+                    str(mp4_path),
+                ]
+                subprocess.run(h264_cmd, check=True)
+                log.info("Saved %s", mp4_path)
     finally:
         concat_list.unlink(missing_ok=True)
 

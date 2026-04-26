@@ -36,12 +36,15 @@ def upload_file(local_path: Path, key: str) -> None:
     )
 
 
-def upload_assets(dist_dir: Path, airports_csv: Path) -> None:
-    upload_file(dist_dir / "flights.json", "flights.json")
+def upload_assets(dist_dir: Path) -> None:
+    # upload_file(dist_dir / "flights.json", "flights.json")
     heatmap = dist_dir / "heatmaps" / "heatmap_last24h.webp"
     if heatmap.exists():
         upload_file(heatmap, "heatmaps/heatmap_last24h.webp")
     video = dist_dir / "heatmaps" / "heatmap_animation.webm"
     if video.exists():
         upload_file(video, "heatmaps/heatmap_animation.webm")
+    mp4 = dist_dir / "heatmaps" / "heatmap_animation.mp4"
+    if mp4.exists():
+        upload_file(mp4, "heatmaps/heatmap_animation.mp4")
     # upload_file(airports_csv, "airports.csv")
