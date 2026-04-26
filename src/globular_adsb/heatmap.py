@@ -28,10 +28,10 @@ QUALITY_STATIC = 90
 QUALITY_VIDEO_SOURCE = 85
 VIDEO_WIDTH = 8192
 VIDEO_HEIGHT = 4096
-VIDEO_CRF = 33
-MOBILE_VIDEO_WIDTH = 1920
-MOBILE_VIDEO_HEIGHT = 960
-MOBILE_VIDEO_CRF = 28
+VIDEO_CRF = 30
+MOBILE_VIDEO_WIDTH = 4096
+MOBILE_VIDEO_HEIGHT = 2048
+MOBILE_VIDEO_CRF = 23
 
 
 def load_flights_window(
@@ -343,7 +343,7 @@ def encode_animation_video(
                     "-i",
                     str(darkmap_path),
                     "-filter_complex",
-                    f"[0:v]fps={str(fps)},scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},fps=60[fg];"
+                    f"[0:v]fps={fps},scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},fps=60[fg];"
                     f"[1:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}[bg];"
                     "[bg][fg]overlay=shortest=1:format=auto[out]",
                     "-map",
@@ -364,6 +364,14 @@ def encode_animation_video(
                     "-deadline",
                     "good",
                     "-cpu-used",
+                    "2",
+                    "-row-mt",
+                    "1",
+                    "-auto-alt-ref",
+                    "1",
+                    "-lag-in-frames",
+                    "25",
+                    "-tile-columns",
                     "2",
                     str(output_path),
                 ]
@@ -402,10 +410,18 @@ def encode_animation_video(
                     "yuv420p",
                     "-crf",
                     str(MOBILE_VIDEO_CRF),
+                    "-preset",
+                    "slow",
+                    "-profile:v",
+                    "high",
+                    "-level",
+                    "5.2",
+                    "-movflags",
+                    "+faststart",
                     "-vsync",
                     "cfr",
                     "-r",
-                    str(fps),
+                    "30",
                     "-shortest",
                     str(mp4_path),
                 ]

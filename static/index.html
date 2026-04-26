@@ -384,47 +384,14 @@
                     max-width: none;
                 }
             }
-            #ios-video-overlay {
-                display: none;
-                position: fixed;
-                inset: 0;
-                background: #000;
-                z-index: 1000;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-            }
-            #ios-video-overlay.visible {
-                display: flex;
-            }
-            #ios-video {
-                width: 100%;
-                height: 100%;
-                object-fit: contain;
-            }
-            #ios-video-close {
-                position: absolute;
-                top: 1rem;
-                right: 1rem;
-                background: rgba(0,0,0,0.6);
-                border: 1px solid rgba(255,255,255,0.4);
-                color: #fff;
-                font-family: monospace;
-                font-size: 1rem;
-                padding: 4px 10px;
-                cursor: pointer;
-                z-index: 1001;
-            }
+
         </style>
 
         <script src="//cdn.jsdelivr.net/npm/globe.gl"></script>
     </head>
 
     <body>
-        <div id="ios-video-overlay">
-            <video id="ios-video" playsinline controls loop></video>
-            <button id="ios-video-close">✕ CLOSE</button>
-        </div>
+
         <div id="globeViz"></div>
         <div id="time"></div>
         <div id="controls">
@@ -451,7 +418,7 @@
                     <span class="ctrl-sep">|</span>
                     <button id="last24h-btn">YDAY</button>
                     <span class="ctrl-sep">|</span>
-                    <button id="video-download-btn">↓ TIMELAPSE<span class="btn-approx"> · APPROX 70MB</span></button>
+                    <button id="video-download-btn">↓ TIMELAPSE<span class="btn-approx"> · APPROX 50MB</span></button>
                     <div id="heatmap-progress">
                         <div id="heatmap-progress-bar">
                             <div id="heatmap-progress-fill"></div>

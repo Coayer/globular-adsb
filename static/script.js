@@ -322,6 +322,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
     const animationVideo = document.createElement('video');
     animationVideo.loop = true;
     animationVideo.muted = true;
+    animationVideo.setAttribute('playsinline', '');
     const animationVideoTexture = new THREE.VideoTexture(animationVideo);
     animationVideoTexture.minFilter = THREE.LinearFilter;
     animationVideoTexture.magFilter = THREE.LinearFilter;
@@ -393,27 +394,9 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         loadLast24h();
     });
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const supportsVp9 = !isIOS && document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
+    const supportsVp9 = !isMobile && document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
     const btnApprox = videoDownloadBtn.querySelector('.btn-approx');
-    if (btnApprox) btnApprox.textContent = supportsVp9 ? ' · APPROX 50MB' : ' · APPROX 3MB';
-    const iosVideoOverlay = document.getElementById('ios-video-overlay');
-    const iosVideo = document.getElementById('ios-video');
-    document.getElementById('ios-video-close').addEventListener('click', () => {
-        iosVideo.pause();
-        iosVideoOverlay.classList.remove('visible');
-        videoPlayBtn.textContent = '▶ PLAY TIMELAPSE';
-        videoPlayBtn.style.display = 'inline-block';
-    });
-
-    videoPlayBtn.addEventListener('click', () => {
-        if (iosVideo.src) {
-            iosVideoOverlay.classList.add('visible');
-            iosVideo.play();
-        }
-    });
-
+    if (btnApprox) btnApprox.textContent = supportsVp9 ? ' · APPROX 50MB' : ' · APPROX 6MB';
     async function fetchWithProgress(url, mimeType) {
         const response = await fetch(url);
         const contentLength = response.headers.get('content-length');
@@ -443,10 +426,23 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
 
         if (!supportsVp9) {
             const blob = await fetchWithProgress(`${ASSETS_BASE}/heatmaps/heatmap_animation.mp4`, 'video/mp4');
+            animationVideo.src = URL.createObjectURL(blob);
+
+            await new Promise(resolve => {
+                animationVideo.addEventListener('loadedmetadata', resolve, { once: true });
+            });
+
             heatmapProgress.style.display = 'none';
-            iosVideo.src = URL.createObjectURL(blob);
-            iosVideoOverlay.classList.add('visible');
-            iosVideo.play();
+            videoPlayBtn.style.display = 'inline-block';
+            buildDayTicks();
+            heatmapSliderWrap.classList.add('visible');
+            last24hBtn.classList.remove("active");
+
+            material.uniforms.heatmapTexture.value = animationVideoTexture;
+            setLiveTrafficEnabled(false);
+            animationVideo.play();
+            videoPlayBtn.textContent = '⏸ PAUSE';
+            setBordermapDisabled(true);
             return;
         }
 
@@ -471,7 +467,6 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
     });
 
     videoPlayBtn.addEventListener("click", () => {
-        if (isIOS) return;
         if (animationVideo.paused) {
             last24hBtn.classList.remove("active");
             material.uniforms.heatmapTexture.value = animationVideoTexture;
