@@ -1,0 +1,17 @@
+[Unit]
+Description=Globular ADS-B Scheduler
+After=network.target
+
+[Service]
+Type=simple
+User=copeland
+WorkingDirectory=/home/copeland/globular-adsb
+EnvironmentFile=/home/copeland/globular-adsb/.env
+ExecStart=/home/copeland/globular-adsb/.venv/bin/globular-scheduler
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
