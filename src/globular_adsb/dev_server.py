@@ -12,7 +12,7 @@ from globular_adsb import config
 
 app = Flask(__name__, static_folder=None)
 
-_DIST_EXTENSIONS = {".webp", ".jpg", ".webm"}
+_DIST_EXTENSIONS = {".webp", ".jpg", ".webm", ".mp4"}
 
 
 @app.route("/flights.json")
@@ -29,6 +29,7 @@ def airports():
 @app.route("/<path:path>")
 def catch_all(path: str):
     from pathlib import PurePosixPath
+
     if PurePosixPath(path).suffix in _DIST_EXTENSIONS:
         return send_from_directory(config.DIST_DIR, path)
     return send_from_directory(config.STATIC_DIR, path)

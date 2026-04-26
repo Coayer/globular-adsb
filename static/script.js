@@ -136,8 +136,10 @@ fetch(`${ASSETS_BASE}/airports.csv`)
     });
 
 // Initialize globe
+const isMobile = window.innerWidth <= 768;
+
 const globe = new Globe(document.getElementById("globeViz"))
-    .pointOfView({ lat: 35, lng: -25 })
+    .pointOfView({ lat: 35, lng: -25, altitude: isMobile ? 4.0 : 2 })
     .objectLat("lat")
     .objectLng("lng")
     .objectAltitude("alt")
@@ -224,7 +226,7 @@ if (navigator.geolocation) {
 
 recenterBtn.addEventListener("click", () => {
     if (userLocation) {
-        globe.pointOfView({ lat: userLocation.lat, lng: userLocation.lng, altitude: 2.5 }, 1000);
+        globe.pointOfView({ lat: userLocation.lat, lng: userLocation.lng, altitude: isMobile ? 4.0 : 2 }, 1000);
     }
 });
 

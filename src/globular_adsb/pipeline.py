@@ -22,13 +22,15 @@ def run_fetch() -> None:
 def run_render() -> None:
     log.info("=== generate heatmap ===")
     if heatmap_mod.needs_regeneration(config.DIST_DIR / "heatmaps"):
-        heatmap_mod.run(config.ARCHIVE_DIR, config.AIRPORTS_CSV, config.DIST_DIR / "heatmaps")
+        heatmap_mod.run(
+            config.ARCHIVE_DIR, config.AIRPORTS_CSV, config.DIST_DIR / "heatmaps"
+        )
     else:
         log.info("Skipping — frames up to date until next midnight.")
 
     log.info("=== upload assets ===")
     if config.R2_ENDPOINT and config.R2_ACCESS_KEY and config.R2_SECRET_KEY:
-        upload.upload_assets(config.DIST_DIR, config.AIRPORTS_CSV)
+        upload.upload_assets(config.DIST_DIR)
     else:
         log.warning("R2 credentials not set, skipping upload.")
 
