@@ -37,7 +37,7 @@ def upload_file(local_path: Path, key: str) -> None:
 
 
 def upload_assets(dist_dir: Path) -> None:
-    # upload_file(dist_dir / "flights.json", "flights.json")
+    upload_file(dist_dir / "flights.json", "flights.json")
     heatmap = dist_dir / "heatmaps" / "heatmap_last24h.webp"
     if heatmap.exists():
         upload_file(heatmap, "heatmaps/heatmap_last24h.webp")

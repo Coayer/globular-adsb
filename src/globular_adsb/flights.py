@@ -113,10 +113,26 @@ def fetch_flights_for_grid(
     return flights, total_raw
 
 
+ARCHIVE_MAX_AGE = 1.25 * 7 * 24 * 3600  # 1.25 weeks in seconds
+
+
+def purge_old_archives(archive_dir: Path) -> None:
+    cutoff = time.time() - ARCHIVE_MAX_AGE
+    for f in archive_dir.glob("*.json"):
+        try:
+            if int(f.stem) < cutoff:
+                f.unlink()
+                log.info("Deleted old archive %s", f.name)
+        except ValueError:
+            pass
+
+
 def run(archive_dir: Path, dist_dir: Path, airports_csv: Path) -> Path:
     """Fetch flights, write a timestamped archive file, and update dist/flights.json."""
     archive_dir.mkdir(exist_ok=True)
     dist_dir.mkdir(exist_ok=True)
+
+    purge_old_archives(archive_dir)
 
     fr_api = FlightRadar24API()
     grid = build_bounds_grid(overlap=OVERLAP)
