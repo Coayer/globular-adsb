@@ -151,7 +151,8 @@ def needs_regeneration(output_dir: Path) -> bool:
     slider_frames = existing - {last24h}
     if slider_frames:
         newest_mtime = max(p.stat().st_mtime for p in slider_frames)
-        if newest_mtime < midnight_ts:
+        three_day_ts = midnight_ts - 2 * 86400
+        if newest_mtime < three_day_ts:
             return True
 
     return False
@@ -246,23 +247,23 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
             "heatmap_last24h.webp pre-dates midnight — regenerating for new calendar day"
         )
 
-    # Slider frames: generate missing ones; full regeneration only when interval elapsed.
+    # Slider frames: full regeneration every 3 days only.
+    three_day_ts = midnight_ts - 2 * 86400
     slider_tasks = [t for t in tasks if t[2] != last24h_path]
-    slider_paths = {t[2] for t in slider_tasks}
-    existing_sliders = {p for p in slider_paths if p.exists()}
-    missing_sliders = slider_paths - existing_sliders
+    existing_sliders = {t[2] for t in slider_tasks if t[2].exists()}
+
+    if existing_sliders:
+        newest_slider_mtime = max(p.stat().st_mtime for p in existing_sliders)
+        regen_sliders = newest_slider_mtime < three_day_ts
+    else:
+        regen_sliders = True
 
     tasks_to_run = []
     if regen_last24h:
         tasks_to_run.extend(t for t in tasks if t[2] == last24h_path)
 
-    if missing_sliders:
-        log.info(
-            "%d slider frame(s) missing — generating missing frames",
-            len(missing_sliders),
-        )
-        tasks_to_run.extend(t for t in slider_tasks if t[2] in missing_sliders)
-    elif regen_last24h:
+    if regen_sliders:
+        log.info("Regenerating all slider frames (3-day interval or first run)")
         tasks_to_run.extend(slider_tasks)
 
     video_path = output_dir / "heatmap_animation.webm"
@@ -282,16 +283,17 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         for future in as_completed(futures):
             outputs.append(future.result())
 
-    encode_animation_video(
-        output_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
-    )
+    if regen_sliders:
+        encode_animation_video(
+            output_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
+        )
     return outputs
 
 
 def encode_animation_video(
     output_dir: Path,
     output_path: Path,
-    fps: int = 20,
+    fps: int = 24,
     *,
     webm: bool = True,
     h264: bool = True,
@@ -343,7 +345,7 @@ def encode_animation_video(
                     "-i",
                     str(darkmap_path),
                     "-filter_complex",
-                    f"[0:v]fps={fps},scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},fps=60[fg];"
+                    f"[0:v]fps={fps},scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},fps={fps}[fg];"
                     f"[1:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}[bg];"
                     "[bg][fg]overlay=shortest=1:format=auto[out]",
                     "-map",
@@ -357,7 +359,7 @@ def encode_animation_video(
                     "-b:v",
                     "0",
                     "-r",
-                    "60",
+                    str(fps),
                     "-vsync",
                     "cfr",
                     "-shortest",
@@ -421,7 +423,7 @@ def encode_animation_video(
                     "-vsync",
                     "cfr",
                     "-r",
-                    "30",
+                    str(fps),
                     "-shortest",
                     str(mp4_path),
                 ]

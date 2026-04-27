@@ -396,7 +396,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
 
     const supportsVp9 = !isMobile && document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
     const btnApprox = videoDownloadBtn.querySelector('.btn-approx');
-    if (btnApprox) btnApprox.textContent = supportsVp9 ? ' · APPROX 50MB' : ' · APPROX 6MB';
+    if (btnApprox) btnApprox.textContent = supportsVp9 ? ' · APPROX 50MB' : ' · APPROX 15MB';
     async function fetchWithProgress(url, mimeType) {
         const response = await fetch(url);
         const contentLength = response.headers.get('content-length');
