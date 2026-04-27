@@ -394,7 +394,9 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         loadLast24h();
     });
 
-    const supportsVp9 = window.innerWidth > 1440 && document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
+    const ua = navigator.userAgent;
+    const isDesktopFirefox = ua.includes('Firefox/') && !ua.includes('FxiOS');
+    const supportsVp9 = !isDesktopFirefox && window.innerWidth > 1440 && document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
     const btnApprox = videoDownloadBtn.querySelector('.btn-approx');
     if (btnApprox) btnApprox.textContent = supportsVp9 ? ' · APPROX 50MB' : ' · APPROX 15MB';
     async function fetchWithProgress(url, mimeType) {
