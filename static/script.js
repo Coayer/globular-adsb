@@ -104,7 +104,47 @@ let now = Date.now();
 let allFlights = [];
 let heatmapEnabled = true;
 let liveTrafficEnabled = true;
+let airportsEnabled = false;
+let airportObjects = [];
+let selectedFlightPoint = null;
+let onTimelapseAirportClick = null;
 const timeDisplay = document.getElementById("time");
+
+function updatePointsData() {
+    globe.pointsData(selectedFlightPoint ? [selectedFlightPoint] : []);
+}
+
+const arcKey = document.getElementById('arc-key');
+
+function clearSelection() {
+    globe.arcsData([]);
+    globe.labelsData([]);
+    selectedFlightPoint = null;
+    arcKey.style.display = 'none';
+    updatePointsData();
+}
+
+function updateObjectsData() {
+    const flights = liveTrafficEnabled ? allFlights : [];
+    const apObjs = airportsEnabled ? airportObjects : [];
+    globe.objectsData([...flights, ...apObjs]);
+}
+
+function computeAirportObjects() {
+    const seen = new Set();
+    for (const f of allFlights) {
+        if (f.origin && f.destination) {
+            seen.add(f.origin);
+            seen.add(f.destination);
+        }
+    }
+    airportObjects = [...seen]
+        .filter(code => airports[code])
+        .map(code => {
+            const a = airports[code];
+            return { lat: a.lat, lng: a.lng, alt: 0, _type: 'airport', _code: code, _name: a.name };
+        });
+}
 
 // Airport lookup table
 const airports = {};
@@ -142,10 +182,37 @@ const globe = new Globe(document.getElementById("globeViz"))
     .pointOfView({ lat: 35, lng: -25, altitude: isMobile ? 4.0 : 2 })
     .objectLat("lat")
     .objectLng("lng")
-    .objectAltitude("alt")
-    .objectLabel("callsign")
-    .objectThreeObject((flight) => {
-        // Create simple aircraft marker (triangle)
+    .objectAltitude((d) => d._type === 'airport' ? 0 : d.alt)
+    .objectLabel((d) => d._type === 'airport' ? `${d._code}: ${d._name}` : d.callsign)
+    .objectThreeObject((d) => {
+        if (d._type === 'airport') {
+            const group = new THREE.Group();
+            const mat = (color, opacity) => {
+                const m = new MeshBasicMaterial({ color });
+                if (opacity !== undefined) { m.transparent = true; m.opacity = opacity; }
+                return m;
+            };
+
+
+            // Cylinders are Y-up by default; rotate so height points radially outward (Z in globe.gl surface frame)
+            group.rotation.x = Math.PI / 2;
+            group.scale.set(2, 2, 2);
+
+            
+            // Hexagonal concrete shaft, no base
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 0.55, 6), mat('#c2c8cf'));
+            shaft.position.y = 0.275;
+            group.add(shaft);
+
+            // Octagonal cab — top wider than bottom (forward slope)
+            const cab = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.26, 0.22, 8), mat('#00d4ff', 0.60));
+            cab.position.y = 0.55 + 0.11;
+            group.add(cab);
+
+            return group;
+        }
+
+        // Aircraft triangle
         const geometry = new BufferGeometry();
         const thickness = 0.05;
         const verts = new Float32Array([
@@ -180,8 +247,8 @@ const globe = new Globe(document.getElementById("globeViz"))
 
         const mesh = new Mesh(geometry, material);
 
-        if (flight.heading !== undefined) {
-            mesh.rotation.z = (-flight.heading * Math.PI) / 180;
+        if (d.heading !== undefined) {
+            mesh.rotation.z = (-d.heading * Math.PI) / 180;
         }
 
         return mesh;
@@ -191,21 +258,27 @@ const globe = new Globe(document.getElementById("globeViz"))
     .arcStartLng((d) => d.startLng)
     .arcEndLat((d) => d.endLat)
     .arcEndLng((d) => d.endLng)
-    .arcColor(() => "cyan")
+    .arcColor((d) => d._direction === 'outbound' ? '#00e676' : d._direction === 'inbound' ? '#ff6d00' : d._direction === 'both' ? '#c77dff' : 'cyan')
     .arcStroke(0.5)
     .arcAltitudeAutoScale(0.3)
     .onGlobeClick(() => {
         globe.arcsData([]);
         globe.labelsData([]);
-        globe.pointsData([]);
+        selectedFlightPoint = null;
+        updatePointsData();
     })
     .labelLat((d) => d.lat)
     .labelLng((d) => d.lng)
     .labelText((d) => d.text)
-    .labelColor(() => "cyan")
-    .labelSize(0.8)
-    .labelDotRadius(0.15)
-    .labelAltitude(0.01);
+    .labelTypeFace({})
+    .labelColor((d) => d._selected ? "#ffffff" : "#fffde0")
+    .labelSize((d) => d._selected ? 1.4 : 0.9)
+    .labelDotRadius((d) => d._selected ? 0.25 : 0.15)
+    .labelAltitude((d) => d._selected ? 0.06 : 0.01);
+
+fetch('/mono_bold.json')
+    .then(r => r.json())
+    .then(typeface => globe.labelTypeFace(typeface));
 
 // Try to center on user
 let userLocation = null;
@@ -249,7 +322,8 @@ function refreshFlights() {
                 heading: f.heading,
             }));
             console.log("Flights loaded:", allFlights.length);
-            if (liveTrafficEnabled) globe.objectsData(allFlights);
+            if (airportsEnabled) computeAirportObjects();
+            updateObjectsData();
         });
 }
 
@@ -291,10 +365,64 @@ function selectFlight(flight) {
 
     globe.arcsData(arcs);
     globe.labelsData(labels);
-    globe.pointsData([{ lat: flight.lat, lng: flight.lng }]);
+    selectedFlightPoint = { lat: flight.lat, lng: flight.lng };
+    updatePointsData();
 }
 
-globe.onObjectClick(selectFlight);
+function selectAirport(airport) {
+    onTimelapseAirportClick?.();
+    const code = airport._code;
+    const ap = airports[code];
+    if (!ap) return;
+
+    const outboundCodes = new Set();
+    const inboundCodes = new Set();
+    for (const f of allFlights) {
+        if (f.origin === code && f.destination && airports[f.destination]) {
+            outboundCodes.add(f.destination);
+        }
+        if (f.destination === code && f.origin && airports[f.origin]) {
+            inboundCodes.add(f.origin);
+        }
+    }
+
+    const arcs = [];
+    const labels = [{ lat: ap.lat, lng: ap.lng, text: `${code}: ${ap.name}`, _selected: true }];
+    const labeledCodes = new Set();
+
+    const allAdjacentCodes = new Set([...outboundCodes, ...inboundCodes]);
+    const bothCount = [...allAdjacentCodes].filter(c => outboundCodes.has(c) && inboundCodes.has(c)).length;
+    console.log(`${code}: ${outboundCodes.size} outbound, ${inboundCodes.size} inbound, ${bothCount} bidirectional`);
+    for (const adjCode of allAdjacentCodes) {
+        const adj = airports[adjCode];
+        const isOut = outboundCodes.has(adjCode);
+        const isIn = inboundCodes.has(adjCode);
+        const direction = isOut && isIn ? 'both' : isOut ? 'outbound' : 'inbound';
+        arcs.push({ startLat: ap.lat, startLng: ap.lng, endLat: adj.lat, endLng: adj.lng, _direction: direction });
+        if (!labeledCodes.has(adjCode)) {
+            labels.push({ lat: adj.lat, lng: adj.lng, text: `${adjCode}: ${adj.name}` });
+            labeledCodes.add(adjCode);
+        }
+    }
+
+    globe.arcsData(arcs);
+    globe.labelsData(labels);
+    arcKey.style.display = '';
+    selectedFlightPoint = null;
+    updatePointsData();
+}
+
+globe.onObjectClick((d) => {
+    if (d._type === 'airport') selectAirport(d);
+    else selectFlight(d);
+});
+
+document.getElementById("airports-toggle").addEventListener("change", (e) => {
+    airportsEnabled = e.target.checked;
+    if (airportsEnabled) computeAirportObjects();
+    else airportObjects = [];
+    updateObjectsData();
+});
 
 // Load day/night textures and apply shader
 new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) => {
@@ -385,6 +513,16 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
             });
     }
 
+    onTimelapseAirportClick = () => {
+        if (animationVideo.paused) return;
+        animationVideo.pause();
+        videoPlayBtn.textContent = '▶ PLAY';
+        videoTimeSlider.disabled = true;
+        setBordermapDisabled(false);
+        last24hBtn.classList.add("active");
+        loadLast24h();
+    };
+
     last24hBtn.addEventListener("click", () => {
         last24hBtn.classList.add("active");
         animationVideo.pause();
@@ -442,6 +580,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
 
             material.uniforms.heatmapTexture.value = animationVideoTexture;
             setLiveTrafficEnabled(false);
+            clearSelection();
             animationVideo.play();
             videoPlayBtn.textContent = '⏸ PAUSE';
             setBordermapDisabled(true);
@@ -463,6 +602,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
 
         material.uniforms.heatmapTexture.value = animationVideoTexture;
         setLiveTrafficEnabled(false);
+        clearSelection();
         animationVideo.play();
         videoPlayBtn.textContent = '⏸ PAUSE';
         setBordermapDisabled(true);
@@ -473,6 +613,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
             last24hBtn.classList.remove("active");
             material.uniforms.heatmapTexture.value = animationVideoTexture;
             setLiveTrafficEnabled(false);
+            clearSelection();
             if (videoTimeSlider.disabled) {
                 animationVideo.currentTime = 0;
                 videoTimeSlider.value = 0;
@@ -499,7 +640,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
     function setLiveTrafficEnabled(enabled) {
         liveTrafficEnabled = enabled;
         document.getElementById("heatmap-toggle").checked = enabled;
-        globe.objectsData(enabled ? allFlights : []);
+        updateObjectsData();
     }
 
     document.getElementById("heatmap-toggle").addEventListener("change", (e) => {
@@ -511,11 +652,11 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
             last24hBtn.classList.add("active");
             loadLast24h();
             liveTrafficEnabled = true;
-            globe.objectsData(allFlights);
+            updateObjectsData();
             return;
         }
         liveTrafficEnabled = e.target.checked;
-        globe.objectsData(liveTrafficEnabled ? allFlights : []);
+        updateObjectsData();
     });
 
     const bordermapToggle = document.getElementById("bordermap-toggle");
@@ -546,6 +687,8 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
             clearTimeout(autopilotTimeout);
             autopilotTimeout = null;
             autopilotSpinning = false;
+            autopilotAirportPrev = null;
+            autopilotNextAirport = null;
             stopManualSpin();
         }
     });
@@ -615,6 +758,8 @@ window.addEventListener("resize", () => {
 // Autopilot: select a random flight and pan from origin to destination
 let autopilotTimeout = null;
 let autopilotSpinning = false;
+let autopilotAirportPrev = null;  // code of airport we just left (to avoid bouncing)
+let autopilotNextAirport = null;  // airport object to visit on next step
 
 // --- Autopilot: heatmap-only spin mode ---
 // Active when autopilot is on, heatmap is enabled, and live traffic is off.
@@ -685,6 +830,71 @@ function stopManualSpin() {
 }
 
 function autopilotStep() {
+    const toRad = (d) => (d * Math.PI) / 180;
+
+    if (airportsEnabled && liveTrafficEnabled) {
+        autopilotSpinning = false;
+        stopManualSpin();
+
+        let airport = autopilotNextAirport;
+        const alreadyThere = !!airport;
+        autopilotNextAirport = null;
+
+        if (!airport) {
+            const candidates = airportObjects.filter(a =>
+                allFlights.some(f => f.origin === a._code && f.destination && airports[f.destination])
+            );
+            if (!candidates.length) {
+                autopilotTimeout = setTimeout(autopilotStep, 3000);
+                return;
+            }
+            const notPrev = candidates.filter(a => a._code !== autopilotAirportPrev);
+            const pool = notPrev.length ? notPrev : candidates;
+            airport = pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        selectAirport(airport);
+        globe.pointOfView({ lat: airport.lat, lng: airport.lng, altitude: 2.0 }, alreadyThere ? 0 : 2000);
+
+        autopilotTimeout = setTimeout(() => {
+            const adjacentCodes = [...new Set(
+                allFlights
+                    .filter(f => f.origin === airport._code && f.destination && airports[f.destination])
+                    .map(f => f.destination)
+            )];
+
+            if (!adjacentCodes.length) {
+                autopilotAirportPrev = null;
+                autopilotNextAirport = null;
+                autopilotTimeout = setTimeout(autopilotStep, 2000);
+                return;
+            }
+
+            // Avoid bouncing back to previous; fall back to full list if no alternatives
+            const notPrev = adjacentCodes.filter(c => c !== autopilotAirportPrev);
+            const pool = notPrev.length ? notPrev : adjacentCodes;
+            const adjacentCode = pool[Math.floor(Math.random() * pool.length)];
+            const dest = airports[adjacentCode];
+
+            const lat1 = toRad(airport.lat), lat2 = toRad(dest.lat);
+            const dlat = lat2 - lat1, dlng = toRad(dest.lng - airport.lng);
+            const a = Math.sin(dlat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlng / 2) ** 2;
+            const angularDist = (2 * Math.asin(Math.sqrt(a)) * 180) / Math.PI;
+            const panDuration = Math.min(7000, Math.max(2000, angularDist * 50));
+
+            autopilotAirportPrev = airport._code;
+            autopilotNextAirport = airportObjects.find(a => a._code === adjacentCode) || null;
+
+            globe.labelsData(globe.labelsData().map(l =>
+                l.lat === dest.lat && l.lng === dest.lng ? { ...l, _selected: true } : l
+            ));
+            globe.pointOfView({ lat: dest.lat, lng: dest.lng, altitude: 2.0 }, panDuration);
+            autopilotTimeout = setTimeout(autopilotStep, panDuration + 500);
+        }, alreadyThere ? 1500 : 2800);
+
+        return;
+    }
+
     const flights = globe.objectsData() || [];
     const eligible = flights.filter(
         (f) => airports[f.origin] && airports[f.destination]
@@ -708,24 +918,17 @@ function autopilotStep() {
     const origin = airports[flight.origin];
     const dest = airports[flight.destination];
 
-    // Haversine angular distance in degrees
-    const toRad = (d) => (d * Math.PI) / 180;
     const lat1 = toRad(origin.lat), lat2 = toRad(dest.lat);
     const dlat = lat2 - lat1, dlng = toRad(dest.lng - origin.lng);
     const a = Math.sin(dlat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlng / 2) ** 2;
     const angularDist = (2 * Math.asin(Math.sqrt(a)) * 180) / Math.PI;
 
-    // Scale pan duration with distance: ~50ms per degree, clamped 1500–8000ms
     const panDuration = Math.min(7000, Math.max(2000, angularDist * 50));
 
-    // Pan to origin first
     globe.pointOfView({ lat: origin.lat, lng: origin.lng, altitude: 1.5 }, 2000);
 
-    // Then pan to destination at distance-scaled speed
     autopilotTimeout = setTimeout(() => {
         globe.pointOfView({ lat: dest.lat, lng: dest.lng, altitude: 1.5 }, panDuration);
-
-        // Pick next flight after the pan completes
         autopilotTimeout = setTimeout(autopilotStep, panDuration + 1000);
     }, 2500);
 }
