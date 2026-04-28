@@ -271,7 +271,7 @@ const globe = new Globe(document.getElementById("globeViz"))
     .labelLng((d) => d.lng)
     .labelText((d) => d.text)
     .labelTypeFace({})
-    .labelColor((d) => d._selected ? "#ffffff" : "#fffde0")
+    .labelColor((d) => d._selected ? "#ffffff" : "#d4d4d4")
     .labelSize((d) => d._selected ? 1.4 : 0.9)
     .labelDotRadius((d) => d._selected ? 0.25 : 0.15)
     .labelAltitude((d) => d._selected ? 0.06 : 0.01);
