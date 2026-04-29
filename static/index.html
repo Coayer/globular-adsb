@@ -294,13 +294,13 @@
                 touch-action: manipulation;
             }
 
-            #arc-key {
+            #arc-key, #busiest-key, #longest-key {
                 align-self: flex-start;
                 background: rgba(0, 0, 0, 0.85);
                 border: 1px solid rgba(0, 180, 220, 0.4);
                 border-top: 2px solid rgba(0, 200, 255, 0.6);
             }
-            #arc-key-toggle {
+            #arc-key-toggle, #busiest-key-toggle, #longest-key-toggle {
                 color: rgba(0, 180, 220, 0.6);
                 font-family: monospace;
                 font-size: 0.68em;
@@ -308,6 +308,7 @@
                 text-transform: uppercase;
                 padding: 5px 10px 3px;
                 user-select: none;
+                cursor: pointer;
             }
             #arc-key-body {
                 display: none;
@@ -316,6 +317,14 @@
                 padding: 2px 10px 8px;
             }
             #arc-key-body.visible { display: flex; }
+            #busiest-key-body {
+                display: none;
+                flex-direction: column;
+                gap: 3px;
+                padding: 2px 10px 8px;
+                min-width: 140px;
+            }
+            #busiest-key-body.visible { display: flex; }
             .key-item {
                 display: flex;
                 align-items: center;
@@ -331,6 +340,75 @@
                 width: 8px;
                 height: 8px;
                 border-radius: 50%;
+                flex-shrink: 0;
+            }
+            .busiest-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                color: rgba(0, 180, 220, 0.85);
+                font-family: monospace;
+                font-size: 0.68em;
+                letter-spacing: 0.08em;
+                white-space: nowrap;
+            }
+            .busiest-rank {
+                color: rgba(0, 180, 220, 0.4);
+                width: 10px;
+                text-align: right;
+                flex-shrink: 0;
+            }
+            .busiest-code {
+                font-weight: bold;
+                color: #00d4ff;
+                width: 30px;
+                flex-shrink: 0;
+            }
+            .busiest-out {
+                color: #00e676;
+                min-width: 36px;
+                text-align: right;
+            }
+            .busiest-in {
+                color: #ff6d00;
+                min-width: 36px;
+                text-align: right;
+            }
+            .busiest-select-btn {
+                background: rgba(0, 180, 220, 0.08);
+                border: 1px solid rgba(0, 180, 220, 0.5);
+                color: #00d4ff;
+                font-family: monospace;
+                font-size: 0.65em;
+                cursor: pointer;
+                padding: 1px 4px;
+                margin: 0;
+                user-select: none;
+                outline: none;
+                flex-shrink: 0;
+                line-height: 1.4;
+                letter-spacing: 0.05em;
+                transition: background 0.12s, border-color 0.12s;
+            }
+            .busiest-select-btn:hover {
+                background: rgba(0, 180, 220, 0.22);
+                border-color: #00d4ff;
+            }
+            #longest-key-body {
+                display: none;
+                flex-direction: column;
+                gap: 3px;
+                padding: 2px 10px 8px;
+                min-width: 160px;
+            }
+            #longest-key-body.visible { display: flex; }
+            .flight-route {
+                color: rgba(0, 180, 220, 0.7);
+                min-width: 70px;
+            }
+            .longest-dist {
+                color: #00e676;
+                min-width: 58px;
                 flex-shrink: 0;
             }
 
@@ -441,6 +519,16 @@
                     <span class="key-item"><span class="key-dot" style="background:#00e676"></span>Outbound</span>
                     <span class="key-item"><span class="key-dot" style="background:#ff6d00"></span>Inbound</span>
                     <span class="key-item"><span class="key-dot" style="background:#c77dff"></span>Both</span>
+                </div>
+            </div>
+            <div id="busiest-key" style="display:none">
+                <div id="busiest-key-toggle">BUSIEST</div>
+                <div id="busiest-key-body" class="visible">
+                </div>
+            </div>
+            <div id="longest-key" style="display:none">
+                <div id="longest-key-toggle">LONGEST</div>
+                <div id="longest-key-body" class="visible">
                 </div>
             </div>
             <div id="bottom-row">

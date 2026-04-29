@@ -106,6 +106,9 @@ let heatmapEnabled = true;
 let liveTrafficEnabled = true;
 let airportsEnabled = false;
 let airportObjects = [];
+let timelapseIsPlaying = false;
+let busiestHasData = false;
+let longestHasData = false;
 let selectedFlightPoint = null;
 let onTimelapseAirportClick = null;
 const timeDisplay = document.getElementById("time");
@@ -115,6 +118,127 @@ function updatePointsData() {
 }
 
 const arcKey = document.getElementById('arc-key');
+const busiestKey = document.getElementById('busiest-key');
+const busiestKeyBody = document.getElementById('busiest-key-body');
+const busiestKeyToggle = document.getElementById('busiest-key-toggle');
+const longestKey = document.getElementById('longest-key');
+const longestKeyBody = document.getElementById('longest-key-body');
+const longestKeyToggle = document.getElementById('longest-key-toggle');
+
+let busiestBodyOpen = true;
+function updateBusiestToggleText() {
+    busiestKeyToggle.textContent = `BUSIEST ${busiestBodyOpen ? '▾' : '▴'}`;
+}
+updateBusiestToggleText();
+busiestKeyToggle.addEventListener('click', () => {
+    busiestBodyOpen = !busiestBodyOpen;
+    busiestKeyBody.classList.toggle('visible', busiestBodyOpen);
+    updateBusiestToggleText();
+});
+
+let longestBodyOpen = true;
+function updateLongestToggleText() {
+    longestKeyToggle.textContent = `LONGEST ${longestBodyOpen ? '▾' : '▴'}`;
+}
+updateLongestToggleText();
+longestKeyToggle.addEventListener('click', () => {
+    longestBodyOpen = !longestBodyOpen;
+    longestKeyBody.classList.toggle('visible', longestBodyOpen);
+    updateLongestToggleText();
+});
+
+function refreshBusiestKey() {
+    busiestKey.style.display = (busiestHasData && airportsEnabled && !timelapseIsPlaying) ? '' : 'none';
+}
+
+function refreshLongestKey() {
+    longestKey.style.display = (longestHasData && liveTrafficEnabled && !timelapseIsPlaying) ? '' : 'none';
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function updateLongestFlights() {
+    const withDist = allFlights
+        .filter(f => airports[f.origin] && airports[f.destination])
+        .map(f => {
+            const orig = airports[f.origin];
+            const dest = airports[f.destination];
+            return { ...f, dist: haversineKm(orig.lat, orig.lng, dest.lat, dest.lng) };
+        })
+        .sort((a, b) => b.dist - a.dist)
+        .slice(0, 10);
+
+    longestKeyBody.innerHTML = '';
+    for (let i = 0; i < withDist.length; i++) {
+        const f = withDist[i];
+        const row = document.createElement('div');
+        row.className = 'busiest-row';
+        row.innerHTML = `<span class="busiest-rank">${i + 1}</span><span class="longest-dist">${Math.round(f.dist).toLocaleString()}km</span><span class="flight-route">${f.origin}→${f.destination}</span>`;
+        const btn = document.createElement('button');
+        btn.className = 'busiest-select-btn';
+        btn.textContent = '→';
+        btn.title = `Select ${f.callsign || f.origin + '→' + f.destination}`;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectFlight(f);
+            globe.pointOfView({ lat: f.lat, lng: f.lng, altitude: 2.0 }, 1000);
+        });
+        row.appendChild(btn);
+        longestKeyBody.appendChild(row);
+    }
+
+    longestHasData = withDist.length > 0;
+    refreshLongestKey();
+}
+
+function updateBusiestAirports() {
+    const counts = {};
+    for (const f of allFlights) {
+        if (f.origin && airports[f.origin]) {
+            if (!counts[f.origin]) counts[f.origin] = { out: 0, in: 0 };
+            counts[f.origin].out++;
+        }
+        if (f.destination && airports[f.destination]) {
+            if (!counts[f.destination]) counts[f.destination] = { out: 0, in: 0 };
+            counts[f.destination].in++;
+        }
+    }
+
+    const sorted = Object.entries(counts)
+        .map(([code, c]) => ({ code, out: c.out, in: c.in, total: c.out + c.in }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10);
+
+    busiestKeyBody.innerHTML = '';
+    for (let i = 0; i < sorted.length; i++) {
+        const { code, out } = sorted[i];
+        const row = document.createElement('div');
+        row.className = 'busiest-row';
+        row.innerHTML = `<span class="busiest-rank">${i + 1}</span><span class="busiest-code">${code}</span><span class="busiest-out">↑${out}</span><span class="busiest-in">↓${sorted[i].in}</span>`;
+        const selectBtn = document.createElement('button');
+        selectBtn.className = 'busiest-select-btn';
+        selectBtn.textContent = '→';
+        selectBtn.title = `Select ${code}`;
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const ap = airports[code];
+            selectAirport({ _code: code });
+            if (ap) globe.pointOfView({ lat: ap.lat, lng: ap.lng, altitude: 2.0 }, 1000);
+        });
+        row.appendChild(selectBtn);
+        busiestKeyBody.appendChild(row);
+    }
+
+    busiestHasData = sorted.length > 0;
+    refreshBusiestKey();
+}
 
 function clearSelection() {
     globe.arcsData([]);
@@ -324,6 +448,8 @@ function refreshFlights() {
             console.log("Flights loaded:", allFlights.length);
             if (airportsEnabled) computeAirportObjects();
             updateObjectsData();
+            updateBusiestAirports();
+            updateLongestFlights();
         });
 }
 
@@ -422,6 +548,7 @@ document.getElementById("airports-toggle").addEventListener("change", (e) => {
     if (airportsEnabled) computeAirportObjects();
     else airportObjects = [];
     updateObjectsData();
+    refreshBusiestKey();
 });
 
 // Load day/night textures and apply shader
@@ -520,11 +647,17 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         videoTimeSlider.disabled = true;
         setBordermapDisabled(false);
         last24hBtn.classList.add("active");
+        timelapseIsPlaying = false;
+        refreshBusiestKey();
+        refreshLongestKey();
         loadLast24h();
     };
 
     last24hBtn.addEventListener("click", () => {
         last24hBtn.classList.add("active");
+        timelapseIsPlaying = false;
+        refreshBusiestKey();
+        refreshLongestKey();
         animationVideo.pause();
         videoPlayBtn.textContent = '▶ PLAY';
         videoTimeSlider.disabled = true;
@@ -577,6 +710,9 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
             buildDayTicks();
             heatmapSliderWrap.classList.add('visible');
             last24hBtn.classList.remove("active");
+            timelapseIsPlaying = true;
+            refreshBusiestKey();
+            refreshLongestKey();
 
             material.uniforms.heatmapTexture.value = animationVideoTexture;
             setLiveTrafficEnabled(false);
@@ -599,6 +735,9 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         buildDayTicks();
         heatmapSliderWrap.classList.add('visible');
         last24hBtn.classList.remove("active");
+        timelapseIsPlaying = true;
+        refreshBusiestKey();
+        refreshLongestKey();
 
         material.uniforms.heatmapTexture.value = animationVideoTexture;
         setLiveTrafficEnabled(false);
@@ -611,6 +750,9 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
     videoPlayBtn.addEventListener("click", () => {
         if (animationVideo.paused) {
             last24hBtn.classList.remove("active");
+            timelapseIsPlaying = true;
+            refreshBusiestKey();
+            refreshLongestKey();
             material.uniforms.heatmapTexture.value = animationVideoTexture;
             setLiveTrafficEnabled(false);
             clearSelection();
@@ -624,6 +766,9 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         } else {
             animationVideo.pause();
             videoPlayBtn.textContent = '▶ PLAY';
+            timelapseIsPlaying = false;
+            refreshBusiestKey();
+            refreshLongestKey();
         }
     });
 
@@ -641,6 +786,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         liveTrafficEnabled = enabled;
         document.getElementById("heatmap-toggle").checked = enabled;
         updateObjectsData();
+        refreshLongestKey();
     }
 
     document.getElementById("heatmap-toggle").addEventListener("change", (e) => {
@@ -650,6 +796,9 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
             videoTimeSlider.disabled = true;
             setBordermapDisabled(false);
             last24hBtn.classList.add("active");
+            timelapseIsPlaying = false;
+            refreshBusiestKey();
+            refreshLongestKey();
             loadLast24h();
             liveTrafficEnabled = true;
             updateObjectsData();
@@ -657,6 +806,7 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
         }
         liveTrafficEnabled = e.target.checked;
         updateObjectsData();
+        refreshLongestKey();
     });
 
     const bordermapToggle = document.getElementById("bordermap-toggle");
@@ -706,10 +856,16 @@ new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`).then((darkTexture) =
             liveTrafficLabel.style.display = "none";
             setBordermapDisabled(false);
             setLiveTrafficEnabled(true);
+            timelapseIsPlaying = false;
+            refreshBusiestKey();
+            refreshLongestKey();
         } else {
             heatmapExtra.classList.add("visible");
             material.uniforms.heatmapMode.value = 1.0;
             last24hBtn.classList.add("active");
+            timelapseIsPlaying = false;
+            refreshBusiestKey();
+            refreshLongestKey();
             loadLast24h();
             liveTrafficLabel.style.display = "";
         }
