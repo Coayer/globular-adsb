@@ -48,108 +48,129 @@ export const globe = new Globe(document.getElementById("globeViz"))
             return group;
         }
 
-if (d._type === 'selected_flight') {
+        if (d._type === "selected_flight") {
             const group = new THREE.Group();
 
             // --- 1. REALISTIC LIVERY & MODEL BASED ON CALLSIGN ---
-            
+
             const getHashFromCallsign = (str) => {
-                if (!str) return Math.random(); 
+                if (!str) return Math.random();
                 let hash = 0;
                 for (let i = 0; i < str.length; i++) {
                     hash = (hash << 5) - hash + str.charCodeAt(i);
-                    hash |= 0; 
+                    hash |= 0;
                 }
-                return Math.abs(hash) % 1000 / 1000;
+                return (Math.abs(hash) % 1000) / 1000;
             };
 
             const hash = getHashFromCallsign(d.callsign);
             const secondaryHash = (hash * 17) % 1; // Used for livery colors
-            const tertiaryHash = (hash * 31) % 1;  // Used for aircraft model!
-            
             // --- AIRCRAFT MODEL SELECTION ---
-            let planeModel = 'TWIN_ENGINE'; // 70% chance (B777, A350, etc)
-            if (tertiaryHash < 0.30) planeModel = 'B747';
+            const aircraftCode = d.aircraftCode || "";
+            const isQuadEngine = /^B74|^A38/i.test(aircraftCode);
+            let planeModel = isQuadEngine ? "B747" : "TWIN_ENGINE";
 
-            const isB747 = planeModel === 'B747';
+            const isB747 = planeModel === "B747";
 
             // Scale adjustments based on model
             const wingSpanScale = isB747 ? 1.15 : 1.0;
             const fuselageZScale = isB747 ? 1.1 : 1.0;
-            const fuselageXScale = isB747 ? 1.1 : 1.0; 
-            
+            const fuselageXScale = isB747 ? 1.1 : 1.0;
+
             // Generate the airline's brand color
             const brandColor = new THREE.Color().setHSL(hash, 0.8, 0.45);
-            
+
             // Livery probability logic
-            const isColoredFuselage = secondaryHash < 0.10; 
-            const isColoredEngines = secondaryHash > 0.10 && secondaryHash < 0.50; 
+            const isColoredFuselage = secondaryHash < 0.1;
+            const isColoredEngines = secondaryHash > 0.1 && secondaryHash < 0.5;
 
-            const whiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-            const wingMat = new THREE.MeshBasicMaterial({ color: '#e0e4e8' }); 
+            const whiteMat = new THREE.MeshBasicMaterial({ color: "#ffffff" });
+            const wingMat = new THREE.MeshBasicMaterial({ color: "#e0e4e8" });
             const brandMat = new THREE.MeshBasicMaterial({ color: brandColor });
-            
-            const fuselageMat = isColoredFuselage ? brandMat : whiteMat;
-            const engineMat = isColoredFuselage || isColoredEngines ? brandMat : whiteMat;
-            const tailMat = brandMat; 
 
-            const glassMat = new THREE.MeshBasicMaterial({ color: '#202124' }); 
-            const cockpitMat = new THREE.MeshBasicMaterial({ color: '#8ab4f8' }); 
+            const fuselageMat = isColoredFuselage ? brandMat : whiteMat;
+            const engineMat =
+                isColoredFuselage || isColoredEngines ? brandMat : whiteMat;
+            const tailMat = brandMat;
+
+            const glassMat = new THREE.MeshBasicMaterial({ color: "#202124" });
+            const cockpitMat = new THREE.MeshBasicMaterial({
+                color: "#8ab4f8",
+            });
 
             // Inner group holds the plane
             const plane = new THREE.Group();
-            
+
             // Make the 747 bigger in general
             if (isB747) {
                 plane.scale.set(1.35, 1.35, 1.35);
             }
-            
+
             // --- 2. DYNAMIC ALTITUDE ---
-            const altMultiplier = 1000; 
-            let planeZ = d.alt ? (d.alt * altMultiplier) : 0.8;
-            plane.position.z = Math.max(0.15, planeZ); 
+            const altMultiplier = 1000;
+            let planeZ = d.alt ? d.alt * altMultiplier : 0.8;
+            plane.position.z = Math.max(0.15, planeZ);
             group.add(plane);
 
             // --- 3. DYNAMIC SHADOW ---
             const shadowGeo = new THREE.CircleGeometry(0.3, 16);
-            const shadowMat = new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25, depthWrite: false });
+            const shadowMat = new THREE.MeshBasicMaterial({
+                color: "#000000",
+                transparent: true,
+                opacity: 0.25,
+                depthWrite: false,
+            });
             const shadow = new THREE.Mesh(shadowGeo, shadowMat);
-            shadow.position.z = 0.01; 
-            
+            shadow.position.z = 0.01;
+
             // Shadow gets bigger for 747s
             const baseShadowScale = isB747 ? 1.4 : 1.0;
-            const shadowScale = baseShadowScale + (plane.position.z * 0.5);
+            const shadowScale = baseShadowScale + plane.position.z * 0.5;
             shadow.scale.set(shadowScale, shadowScale, shadowScale);
-            shadow.material.opacity = Math.max(0.1, 0.3 - (plane.position.z * 0.2)); 
+            shadow.material.opacity = Math.max(
+                0.1,
+                0.3 - plane.position.z * 0.2,
+            );
             group.add(shadow);
-
 
             // --- PLANE GEOMETRIES ---
 
             // Fuselage
-            const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.03, 1.1, 16), fuselageMat);
+            const fuselage = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.065, 0.03, 1.1, 16),
+                fuselageMat,
+            );
             fuselage.scale.set(fuselageXScale, 1, fuselageZScale);
             plane.add(fuselage);
 
-            // Nose cone 
-            const nose = new THREE.Mesh(new THREE.SphereGeometry(0.065, 16, 16), fuselageMat);
+            // Nose cone
+            const nose = new THREE.Mesh(
+                new THREE.SphereGeometry(0.065, 16, 16),
+                fuselageMat,
+            );
             nose.scale.set(fuselageXScale, 2.2, fuselageZScale);
             nose.position.y = 0.55;
             plane.add(nose);
 
             // Boeing 747 Iconic Hump
             if (isB747) {
-                const hump = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 16), fuselageMat);
+                const hump = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.045, 16, 16),
+                    fuselageMat,
+                );
                 hump.scale.set(0.9, 4.0, 1.2);
-                hump.position.set(0, 0.30, 0.055); // Positioned on the top front half
+                hump.position.set(0, 0.3, 0.055); // Positioned on the top front half
                 hump.rotation.x = -0.05;
                 plane.add(hump);
             }
 
             // Cockpit Windshield
-            const cockpit = new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 16), cockpitMat);
+            const cockpit = new THREE.Mesh(
+                new THREE.SphereGeometry(0.04, 16, 16),
+                cockpitMat,
+            );
             cockpit.scale.set(0.8, 1.5, 0.6);
-            
+
             if (isB747) {
                 // 747 cockpit is high up inside the hump
                 cockpit.position.set(0, 0.48, 0.095);
@@ -162,57 +183,71 @@ if (d._type === 'selected_flight') {
             plane.add(cockpit);
 
             // Main Wings
-            const wingGeo = new THREE.BoxGeometry(0.9 * wingSpanScale, 0.18, 0.015);
-            
+            const wingGeo = new THREE.BoxGeometry(
+                0.9 * wingSpanScale,
+                0.18,
+                0.015,
+            );
+
             const rWing = new THREE.Mesh(wingGeo, wingMat);
             rWing.position.set(0.4 * wingSpanScale, 0.05, 0);
-            rWing.rotation.z = -0.35; 
+            rWing.rotation.z = -0.35;
             plane.add(rWing);
 
             const lWing = new THREE.Mesh(wingGeo, wingMat);
             lWing.position.set(-0.4 * wingSpanScale, 0.05, 0);
-            lWing.rotation.z = 0.35; 
+            lWing.rotation.z = 0.35;
             plane.add(lWing);
 
             // Engines (4 for Jumbo Jets, 2 for Standard)
             const enginesPerWing = isB747 ? 2 : 1;
-            
+
             for (const side of [-1, 1]) {
                 for (let i = 0; i < enginesPerWing; i++) {
                     const engineGroup = new THREE.Group();
-                    
+
                     // Default to Twin Engine positions
                     let xPos = side * 0.28;
-                    let yPos = 0.18; 
-                    
+                    let yPos = 0.18;
+
                     // If Quad-Engine, stagger an inner and an outer engine
                     if (enginesPerWing === 2) {
                         if (i === 0) {
                             xPos = side * 0.25; // Inner engine
-                            yPos = 0.25;        // Brought forward significantly (was 0.18)
+                            yPos = 0.25; // Brought forward significantly (was 0.18)
                         } else {
                             xPos = side * 0.62; // Outer engine moved further out (was 0.46)
-                            yPos = 0.1;        // Brought forward significantly (was 0.06)
+                            yPos = 0.1; // Brought forward significantly (was 0.06)
                         }
                     }
 
                     engineGroup.position.set(xPos, yPos, -0.04);
 
                     // Engine housing
-                    const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.22, 16), engineMat);
+                    const eng = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.045, 0.035, 0.22, 16),
+                        engineMat,
+                    );
                     engineGroup.add(eng);
 
                     // Engine intake
-                    const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16), glassMat);
-                    intake.position.y = 0.11; 
+                    const intake = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16),
+                        glassMat,
+                    );
+                    intake.position.y = 0.11;
                     engineGroup.add(intake);
 
                     plane.add(engineGroup);
                 }
             }
 
-            // Horizontal Stabilizers 
-            const hStabGeo = new THREE.BoxGeometry(0.35 * wingSpanScale, 0.12, 0.015);
+            // Horizontal Stabilizers
+            const hStabGeo = new THREE.BoxGeometry(
+                0.35 * wingSpanScale,
+                0.12,
+                0.015,
+            );
             const rHStab = new THREE.Mesh(hStabGeo, wingMat);
             rHStab.position.set(0.15 * wingSpanScale, -0.45, 0);
             rHStab.rotation.z = -0.4;
@@ -224,30 +259,52 @@ if (d._type === 'selected_flight') {
             plane.add(lHStab);
 
             // Vertical Stabilizer / Tail Fin
-            const vStabGeo = new THREE.BoxGeometry(0.015, 0.18 * fuselageZScale, 0.22 * fuselageZScale);
+            const vStabGeo = new THREE.BoxGeometry(
+                0.015,
+                0.18 * fuselageZScale,
+                0.22 * fuselageZScale,
+            );
             const vStab = new THREE.Mesh(vStabGeo, tailMat);
             vStab.position.set(0, -0.42, 0.12 * fuselageZScale);
-            vStab.rotation.x = 0.35; 
+            vStab.rotation.x = 0.35;
             plane.add(vStab);
 
             // --- INFO LABEL SPRITE ---
-            const lc = document.createElement('canvas');
-            lc.width = 290; lc.height = 310;
-            const lx = lc.getContext('2d');
-            lx.fillStyle = 'rgba(0,0,0,0.82)';
-            lx.beginPath(); lx.roundRect(3, 3, 284, 304, 8); lx.fill();
-            lx.strokeStyle = 'rgba(0,212,255,0.7)';
+            const lc = document.createElement("canvas");
+            lc.width = 290;
+            lc.height = 310;
+            const lx = lc.getContext("2d");
+            lx.fillStyle = "rgba(0,0,0,0.82)";
+            lx.beginPath();
+            lx.roundRect(3, 3, 284, 304, 8);
+            lx.fill();
+            lx.strokeStyle = "rgba(0,212,255,0.7)";
             lx.lineWidth = 3;
-            lx.beginPath(); lx.roundRect(3, 3, 284, 304, 8); lx.stroke();
-            lx.font = 'bold 56px monospace'; lx.fillStyle = '#00d4ff';
-            lx.fillText(d.callsign || '—', 14, 60);
-            lx.font = '42px monospace'; lx.fillStyle = 'rgba(0,180,220,0.65)';
-            lx.fillText(d.aircraftCode || '—', 14, 112);
-            lx.fillStyle = 'rgba(200,240,255,0.85)';
-            lx.fillText(d.altitude ? `FL${Math.round(d.altitude / 100)}` : '—', 14, 164);
-            lx.fillText(d.groundSpeed ? `${Math.round(d.groundSpeed)}kts` : '—', 14, 216);
-            const route = (d.origin && d.destination) ? `${d.origin}→${d.destination}` : (d.origin || d.destination || '—');
-            lx.fillStyle = 'rgba(160,220,255,0.75)';
+            lx.beginPath();
+            lx.roundRect(3, 3, 284, 304, 8);
+            lx.stroke();
+            lx.font = "bold 56px monospace";
+            lx.fillStyle = "#00d4ff";
+            lx.fillText(d.callsign || "—", 14, 60);
+            lx.font = "42px monospace";
+            lx.fillStyle = "rgba(0,180,220,0.65)";
+            lx.fillText(d.aircraftCode || "—", 14, 112);
+            lx.fillStyle = "rgba(200,240,255,0.85)";
+            lx.fillText(
+                d.altitude ? `FL${Math.round(d.altitude / 100)}` : "—",
+                14,
+                164,
+            );
+            lx.fillText(
+                d.groundSpeed ? `${Math.round(d.groundSpeed)}kts` : "—",
+                14,
+                216,
+            );
+            const route =
+                d.origin && d.destination
+                    ? `${d.origin}→${d.destination}`
+                    : d.origin || d.destination || "—";
+            lx.fillStyle = "rgba(160,220,255,0.75)";
             lx.fillText(route, 14, 268);
             const lt = new THREE.CanvasTexture(lc);
             const lm = new THREE.SpriteMaterial({ map: lt, depthTest: false });
@@ -258,7 +315,8 @@ if (d._type === 'selected_flight') {
 
             // --- FINAL SCALING & ROTATION ---
             group.scale.set(3.5, 3.5, 3.5);
-            if (d.heading !== undefined) group.rotation.z = (-d.heading * Math.PI) / 180;
+            if (d.heading !== undefined)
+                group.rotation.z = (-d.heading * Math.PI) / 180;
 
             return group;
         }
@@ -320,7 +378,6 @@ if (d._type === 'selected_flight') {
     .labelSize((d) => (d._selected ? 1.4 : 0.9))
     .labelDotRadius((d) => (d._selected ? 0.25 : 0.15))
     .labelAltitude((d) => (d._selected ? 0.06 : 0.01));
-
 
 fetch("/mono_bold.json")
     .then((r) => r.json())
