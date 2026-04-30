@@ -307,7 +307,7 @@ export const globe = new Globe(document.getElementById("globeViz"))
             lx.fillStyle = "rgba(160,220,255,0.75)";
             lx.fillText(route, 14, 268);
             const lt = new THREE.CanvasTexture(lc);
-            const lm = new THREE.SpriteMaterial({ map: lt, depthTest: false });
+            const lm = new THREE.SpriteMaterial({ map: lt });
             const ls = new THREE.Sprite(lm);
             ls.scale.set(3.2, 3.42, 1);
             ls.position.set(3.5, 0, plane.position.z + 0.5);
