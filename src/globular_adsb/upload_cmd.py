@@ -4,9 +4,11 @@ from globular_adsb import config, upload
 
 
 def main() -> None:
-    if not (config.R2_ENDPOINT and config.R2_ACCESS_KEY and config.R2_SECRET_KEY):
-        raise SystemExit("R2 credentials not set.")
-    upload.upload_assets(config.DIST_DIR)
+    try:
+        upload.upload_flights(config.DIST_DIR)
+        upload.upload_heatmaps(config.DIST_DIR)
+    except upload.CredentialsError as e:
+        raise SystemExit(e)
     print("Upload complete.")
 
 

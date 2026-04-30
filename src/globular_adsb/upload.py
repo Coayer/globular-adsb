@@ -2,6 +2,7 @@
 
 import logging
 import mimetypes
+import time
 from pathlib import Path
 
 import boto3
@@ -12,7 +13,13 @@ from globular_adsb import config
 log = logging.getLogger(__name__)
 
 
+class CredentialsError(Exception):
+    pass
+
+
 def _client():
+    if not (config.R2_ENDPOINT and config.R2_ACCESS_KEY and config.R2_SECRET_KEY):
+        raise CredentialsError("R2 credentials not set")
     return boto3.client(
         "s3",
         endpoint_url=config.R2_ENDPOINT,
@@ -36,15 +43,22 @@ def upload_file(local_path: Path, key: str) -> None:
     )
 
 
-def upload_assets(dist_dir: Path) -> None:
+def upload_flights(dist_dir: Path) -> None:
     upload_file(dist_dir / "flights.json", "flights.json")
+
+
+def _recent(path: Path) -> bool:
+    return path.exists() and (time.time() - path.stat().st_mtime) < 86400
+
+
+def upload_heatmaps(dist_dir: Path) -> None:
     heatmap = dist_dir / "heatmaps" / "heatmap_last24h.webp"
-    if heatmap.exists():
+    if _recent(heatmap):
         upload_file(heatmap, "heatmaps/heatmap_last24h.webp")
     video = dist_dir / "heatmaps" / "heatmap_animation.webm"
-    if video.exists():
+    if _recent(video):
         upload_file(video, "heatmaps/heatmap_animation.webm")
     mp4 = dist_dir / "heatmaps" / "heatmap_animation.mp4"
-    if mp4.exists():
+    if _recent(mp4):
         upload_file(mp4, "heatmaps/heatmap_animation.mp4")
     # upload_file(airports_csv, "airports.csv")

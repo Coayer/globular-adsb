@@ -16,6 +16,10 @@ _LOG_DATE = "%Y-%m-%d %H:%M:%S"
 def run_fetch() -> None:
     log.info("=== fetch flights ===")
     flights_mod.run(config.ARCHIVE_DIR, config.DIST_DIR, config.AIRPORTS_CSV)
+    try:
+        upload.upload_flights(config.DIST_DIR)
+    except upload.CredentialsError as e:
+        log.warning("Skipping flights upload: %s", e)
     log.info("Fetch complete.")
 
 
@@ -28,11 +32,11 @@ def run_render() -> None:
     else:
         log.info("Skipping — frames up to date until next midnight.")
 
-    log.info("=== upload assets ===")
-    if config.R2_ENDPOINT and config.R2_ACCESS_KEY and config.R2_SECRET_KEY:
-        upload.upload_assets(config.DIST_DIR)
-    else:
-        log.warning("R2 credentials not set, skipping upload.")
+    log.info("=== upload heatmaps ===")
+    try:
+        upload.upload_heatmaps(config.DIST_DIR)
+    except upload.CredentialsError as e:
+        log.warning("Skipping heatmap upload: %s", e)
 
     log.info("Render+upload complete.")
 
