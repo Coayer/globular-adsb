@@ -389,6 +389,7 @@ button, label, input[type="checkbox"], input[type="range"] {
     flex-shrink: 0;
 }
 
+
 @media (max-width: 600px) {
     #time {
         font-size: 0.85em;

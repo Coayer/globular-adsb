@@ -230,10 +230,33 @@ if (d._type === 'selected_flight') {
             vStab.rotation.x = 0.35; 
             plane.add(vStab);
 
+            // --- INFO LABEL SPRITE ---
+            const lc = document.createElement('canvas');
+            lc.width = 290; lc.height = 260;
+            const lx = lc.getContext('2d');
+            lx.fillStyle = 'rgba(0,0,0,0.82)';
+            lx.beginPath(); lx.roundRect(3, 3, 284, 254, 8); lx.fill();
+            lx.strokeStyle = 'rgba(0,212,255,0.7)';
+            lx.lineWidth = 3;
+            lx.beginPath(); lx.roundRect(3, 3, 284, 254, 8); lx.stroke();
+            lx.font = 'bold 56px monospace'; lx.fillStyle = '#00d4ff';
+            lx.fillText(d.callsign || '—', 14, 60);
+            lx.font = '42px monospace'; lx.fillStyle = 'rgba(0,180,220,0.65)';
+            lx.fillText(d.aircraftCode || '—', 14, 112);
+            lx.fillStyle = 'rgba(200,240,255,0.85)';
+            lx.fillText(d.altitude ? `FL${Math.round(d.altitude / 100)}` : '—', 14, 164);
+            lx.fillText(d.groundSpeed ? `${Math.round(d.groundSpeed)}kts` : '—', 14, 216);
+            const lt = new THREE.CanvasTexture(lc);
+            const lm = new THREE.SpriteMaterial({ map: lt, depthTest: false });
+            const ls = new THREE.Sprite(lm);
+            ls.scale.set(3.2, 2.87, 1);
+            ls.position.set(3.5, 0, plane.position.z + 0.5);
+            group.add(ls);
+
             // --- FINAL SCALING & ROTATION ---
             group.scale.set(3.5, 3.5, 3.5);
             if (d.heading !== undefined) group.rotation.z = (-d.heading * Math.PI) / 180;
-            
+
             return group;
         }
 
@@ -294,6 +317,7 @@ if (d._type === 'selected_flight') {
     .labelSize((d) => (d._selected ? 1.4 : 0.9))
     .labelDotRadius((d) => (d._selected ? 0.25 : 0.15))
     .labelAltitude((d) => (d._selected ? 0.06 : 0.01));
+
 
 fetch("/mono_bold.json")
     .then((r) => r.json())

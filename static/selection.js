@@ -86,6 +86,9 @@ export function selectFlight(flight) {
         lat: flight.lat, lng: flight.lng,
         alt: flight.alt, heading: flight.heading,
         callsign: flight.callsign,
+        aircraftCode: flight.aircraftCode,
+        altitude: flight.altitude,
+        groundSpeed: flight.groundSpeed,
         _type: 'selected_flight',
     };
     updatePointsData();

@@ -108,6 +108,8 @@ export function refreshFlights() {
                 alt: (f.altitude * FEET_TO_KM) / EARTH_RADIUS_KM + Math.random() * 0.001,
                 callsign: f.callsign,
                 aircraftCode: f.aircraftCode,
+                altitude: f.altitude,
+                groundSpeed: f.groundSpeed,
                 origin: f.originAirportIata,
                 destination: f.destinationAirportIata,
                 heading: f.heading,
