@@ -89,6 +89,8 @@ export function selectFlight(flight) {
         aircraftCode: flight.aircraftCode,
         altitude: flight.altitude,
         groundSpeed: flight.groundSpeed,
+        origin: flight.origin,
+        destination: flight.destination,
         _type: 'selected_flight',
     };
     updatePointsData();
