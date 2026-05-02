@@ -29,7 +29,10 @@
     <body>
 
         <div id="globeViz"></div>
-        <div id="time"></div>
+<div id="top-right">
+            <button id="recenter-btn">◎<span class="recenter-text"> RECENTER</span></button>
+            <button id="fullscreen-btn">⛶<span class="fullscreen-text"> FULL</span></button>
+        </div>
         <div id="controls">
             <div id="arc-key" style="display:none">
                 <div id="arc-key-toggle">ACTIVE ROUTES</div>
@@ -50,8 +53,6 @@
                 </div>
             </div>
             <div id="bottom-row">
-                <button id="recenter-btn">➤<span class="recenter-text"> RECENTER</span></button>
-                <span class="ctrl-sep" id="recenter-sep" style="display:none">|</span>
                 <label id="airports-label">
                     <span>Airports</span>
                     <input type="checkbox" id="airports-toggle" />

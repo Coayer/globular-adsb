@@ -2,9 +2,10 @@ import { ASSETS_BASE, EARTH_RADIUS_KM, FEET_TO_KM } from './constants.js';
 import { airports, haversineKm, computeAirportObjects } from './airports.js';
 import { globe } from './globe.js';
 import { state } from './state.js';
-import { refreshBusiestKey, refreshLongestKey, selectAirport, selectFlight } from './selection.js';
+import { refreshBusiestKey, refreshLongestKey, selectAirport, selectFlight, closeBusiestKey, closeLongestKey } from './selection.js';
 
-const timeDisplay = document.getElementById('time');
+const isMobile = window.innerWidth <= 600;
+
 const busiestKeyBody = document.getElementById('busiest-key-body');
 const longestKeyBody = document.getElementById('longest-key-body');
 
@@ -44,14 +45,16 @@ export function updateBusiestAirports() {
         row.innerHTML = `<span class="busiest-rank">${i + 1}</span><span class="busiest-code">${code}</span><span class="busiest-out">↑${out}</span><span class="busiest-in">↓${sorted[i].in}</span>`;
         const btn = document.createElement('button');
         btn.className = 'busiest-select-btn';
-        btn.textContent = '→';
+        btn.textContent = '❯';
         btn.title = `Select ${code}`;
-        btn.addEventListener('click', e => {
-            e.stopPropagation();
+        const handler = () => {
             const ap = airports[code];
             selectAirport({ _code: code });
             if (ap) globe.pointOfView({ lat: ap.lat, lng: ap.lng, altitude: 2.0 }, 1000);
-        });
+            if (isMobile) closeBusiestKey();
+        };
+        row.addEventListener('click', handler);
+        btn.addEventListener('click', e => e.stopPropagation());
         row.appendChild(btn);
         busiestKeyBody.appendChild(row);
     }
@@ -79,13 +82,15 @@ export function updateLongestFlights() {
         row.innerHTML = `<span class="busiest-rank">${i + 1}</span><span class="longest-dist">${Math.round(f.dist).toLocaleString()}km</span><span class="flight-route">${f.origin}→${f.destination}</span>`;
         const btn = document.createElement('button');
         btn.className = 'busiest-select-btn';
-        btn.textContent = '→';
+        btn.textContent = '❯';
         btn.title = `Select ${f.callsign || f.origin + '→' + f.destination}`;
-        btn.addEventListener('click', e => {
-            e.stopPropagation();
+        const handler = () => {
             selectFlight(f);
             globe.pointOfView({ lat: f.lat, lng: f.lng, altitude: 2.0 }, 1000);
-        });
+            if (isMobile) closeLongestKey();
+        };
+        row.addEventListener('click', handler);
+        btn.addEventListener('click', e => e.stopPropagation());
         row.appendChild(btn);
         longestKeyBody.appendChild(row);
     }
@@ -98,10 +103,6 @@ export function refreshFlights() {
     fetch(`${ASSETS_BASE}/flights.json?t=${Date.now()}`)
         .then(r => r.json())
         .then(data => {
-            if (data.timestamp) {
-                const ts = new Date(data.timestamp * 1000);
-                timeDisplay.textContent = `Traffic updated: ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}`;
-            }
             state.allFlights = data.flights.map(f => ({
                 lat: f.latitude,
                 lng: f.longitude,

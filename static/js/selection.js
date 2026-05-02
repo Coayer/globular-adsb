@@ -10,28 +10,53 @@ const longestKey = document.getElementById('longest-key');
 const longestKeyBody = document.getElementById('longest-key-body');
 const longestKeyToggle = document.getElementById('longest-key-toggle');
 
-let busiestBodyOpen = true;
-let longestBodyOpen = true;
+const isMobile = window.innerWidth <= 600;
+let busiestBodyOpen = !isMobile;
+let longestBodyOpen = !isMobile;
 
 function updateBusiestToggleText() {
-    busiestKeyToggle.textContent = `busiest airports ${busiestBodyOpen ? '▾' : '▴'}`;
+    busiestKeyToggle.textContent = `busiest airports ${busiestBodyOpen ? '[-]' : '[+]'}`;
 }
 function updateLongestToggleText() {
-    longestKeyToggle.textContent = `longest flights ${longestBodyOpen ? '▾' : '▴'}`;
+    longestKeyToggle.textContent = `longest flights ${longestBodyOpen ? '[-]' : '[+]'}`;
 }
 updateBusiestToggleText();
 updateLongestToggleText();
+busiestKeyBody.classList.toggle('visible', busiestBodyOpen);
+longestKeyBody.classList.toggle('visible', longestBodyOpen);
 
 busiestKeyToggle.addEventListener('click', () => {
     busiestBodyOpen = !busiestBodyOpen;
+    if (busiestBodyOpen && longestBodyOpen) {
+        longestBodyOpen = false;
+        longestKeyBody.classList.remove('visible');
+        updateLongestToggleText();
+    }
     busiestKeyBody.classList.toggle('visible', busiestBodyOpen);
     updateBusiestToggleText();
 });
 longestKeyToggle.addEventListener('click', () => {
     longestBodyOpen = !longestBodyOpen;
+    if (longestBodyOpen && busiestBodyOpen) {
+        busiestBodyOpen = false;
+        busiestKeyBody.classList.remove('visible');
+        updateBusiestToggleText();
+    }
     longestKeyBody.classList.toggle('visible', longestBodyOpen);
     updateLongestToggleText();
 });
+
+export function closeBusiestKey() {
+    busiestBodyOpen = false;
+    busiestKeyBody.classList.remove('visible');
+    updateBusiestToggleText();
+}
+
+export function closeLongestKey() {
+    longestBodyOpen = false;
+    longestKeyBody.classList.remove('visible');
+    updateLongestToggleText();
+}
 
 export function refreshBusiestKey() {
     busiestKey.style.display =
@@ -82,6 +107,7 @@ export function selectFlight(flight) {
 
     globe.arcsData(arcs);
     globe.labelsData(labels);
+    arcKey.style.display = 'none';
     state.selectedFlightPoint = {
         lat: flight.lat, lng: flight.lng,
         alt: flight.alt, heading: flight.heading,

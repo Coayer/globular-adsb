@@ -7,8 +7,9 @@ import { initHeatmap } from './heatmap.js';
 import { initAutopilot } from './autopilot.js';
 
 const recenterBtn = document.getElementById('recenter-btn');
-const recenterSep = document.getElementById('recenter-sep');
+const fullscreenBtn = document.getElementById('fullscreen-btn');
 let userLocation = null;
+let uiHidden = false;
 
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
@@ -16,7 +17,6 @@ if (navigator.geolocation) {
             userLocation = { lat: coords.latitude, lng: coords.longitude };
             globe.pointOfView(userLocation);
             recenterBtn.classList.add('visible');
-            recenterSep.style.display = '';
         },
         err => console.warn('Geolocation error:', err)
     );
@@ -26,6 +26,15 @@ recenterBtn.addEventListener('click', () => {
     if (userLocation) {
         globe.pointOfView({ lat: userLocation.lat, lng: userLocation.lng, altitude: isMobile ? 4.0 : 2 }, 1000);
     }
+});
+
+fullscreenBtn.addEventListener('click', () => {
+    uiHidden = !uiHidden;
+    document.body.classList.toggle('ui-hidden', uiHidden);
+    fullscreenBtn.classList.toggle('active', uiHidden);
+    fullscreenBtn.innerHTML = uiHidden
+        ? '✕<span class="fullscreen-text"> EXIT</span>'
+        : '⛶<span class="fullscreen-text"> FULL</span>';
 });
 
 globe
