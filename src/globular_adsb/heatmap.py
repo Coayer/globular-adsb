@@ -61,25 +61,27 @@ def latlon_to_xy(lat: float, lon: float) -> tuple[int, int]:
 
 
 def build_heatmap(
-    flights: list[dict], airports: dict[str, tuple[float, float]]
+    flights: list[dict],
+    airports: dict[str, tuple[float, float]],
+    longhaul_only: bool = True,
 ) -> np.ndarray:
     density = np.zeros((FRAME_HEIGHT, FRAME_WIDTH), dtype=np.float32)
     skipped = 0
     r = DILATION_RADIUS
     for f in flights:
-        if not is_longhaul(f, airports):
-            skipped += 1
-            continue
-        origin = f["originAirportIata"]
-        dest = f["destinationAirportIata"]
-        dist = haversine_km(*airports[origin], *airports[dest])
-        w = distance_weight(dist)
-        w = 1.0
+        if longhaul_only:
+            if not is_longhaul(f, airports):
+                skipped += 1
+                continue
+        else:
+            if f.get("latitude") is None or f.get("longitude") is None:
+                skipped += 1
+                continue
         x, y = latlon_to_xy(f["latitude"], f["longitude"])
-        density[max(0, y - r) : y + r + 1, max(0, x - r) : x + r + 1] += w
+        density[max(0, y - r) : y + r + 1, max(0, x - r) : x + r + 1] += 1.0
 
     log.info(
-        "%d weighted, %d missing/short-haul skipped", len(flights) - skipped, skipped
+        "%d plotted, %d skipped", len(flights) - skipped, skipped
     )
     return density
 
@@ -115,7 +117,7 @@ def density_to_rgba(density: np.ndarray) -> np.ndarray:
 
 
 def _expected_frame_paths(output_dir: Path) -> set[Path]:
-    paths = {output_dir / "heatmap_last24h.webp"}
+    paths = {output_dir / "heatmap_last24h.webp", output_dir / "heatmap_all_last24h.webp"}
     max_n = TOTAL_HOURS - WINDOW_HOURS
     n = 1.0
     while n <= max_n + 1e-9:
@@ -144,11 +146,13 @@ def needs_regeneration(output_dir: Path) -> bool:
         .replace(hour=0, minute=0, second=0, microsecond=0)
         .timestamp()
     )
-    last24h = output_dir / "heatmap_last24h.webp"
-    if last24h.stat().st_mtime < midnight_ts:
-        return True
+    for fname in ("heatmap_last24h.webp", "heatmap_all_last24h.webp"):
+        p = output_dir / fname
+        if not p.exists() or p.stat().st_mtime < midnight_ts:
+            return True
 
-    slider_frames = existing - {last24h}
+    last24h_paths = {output_dir / "heatmap_last24h.webp", output_dir / "heatmap_all_last24h.webp"}
+    slider_frames = existing - last24h_paths
     if slider_frames:
         newest_mtime = max(p.stat().st_mtime for p in slider_frames)
         three_day_ts = midnight_ts - 2 * 86400
@@ -165,6 +169,7 @@ def run_window(
     start_hours: float,
     end_hours: float,
     quality: int = QUALITY_VIDEO_SOURCE,
+    longhaul_only: bool = True,
 ) -> Path:
     # Subprocess workers don't inherit handlers from the parent process.
     from globular_adsb.pipeline import _LOG_DATE, _LOG_FORMAT
@@ -180,7 +185,7 @@ def run_window(
         return output_path
 
     log.info("Building density map …")
-    density = build_heatmap(flights, airports)
+    density = build_heatmap(flights, airports, longhaul_only)
 
     log.info("Rendering colours …")
     rgba = density_to_rgba(density)
@@ -201,6 +206,8 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     midnight_ts = today_midnight.timestamp()
 
     last24h_path = output_dir / "heatmap_last24h.webp"
+    all_last24h_path = output_dir / "heatmap_all_last24h.webp"
+    last24h_paths = {last24h_path, all_last24h_path}
     tasks: list[tuple] = [
         (
             archive_dir,
@@ -209,6 +216,16 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
             hours_since_midnight,
             hours_since_midnight + 24.0,
             QUALITY_STATIC,
+            True,
+        ),
+        (
+            archive_dir,
+            airports,
+            all_last24h_path,
+            hours_since_midnight,
+            hours_since_midnight + 24.0,
+            QUALITY_STATIC,
+            False,
         ),
     ]
     # Slider positions 1–(TOTAL_HOURS-WINDOW_HOURS) in STEP_HOURS increments.
@@ -238,18 +255,16 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
             log.warning("Removing extraneous frame: %s", p.name)
             p.unlink()
 
-    # last24h: regenerate if missing or generated before today's midnight.
-    regen_last24h = (
-        not last24h_path.exists() or last24h_path.stat().st_mtime < midnight_ts
+    # last24h: regenerate if any daily heatmap is missing or pre-dates midnight.
+    regen_last24h = any(
+        not p.exists() or p.stat().st_mtime < midnight_ts for p in last24h_paths
     )
-    if regen_last24h and last24h_path.exists():
-        log.info(
-            "heatmap_last24h.webp pre-dates midnight — regenerating for new calendar day"
-        )
+    if regen_last24h:
+        log.info("Daily heatmaps missing or pre-date midnight — regenerating")
 
     # Slider frames: full regeneration every 3 days only.
     three_day_ts = midnight_ts - 2 * 86400
-    slider_tasks = [t for t in tasks if t[2] != last24h_path]
+    slider_tasks = [t for t in tasks if t[2] not in last24h_paths]
     existing_sliders = {t[2] for t in slider_tasks if t[2].exists()}
 
     if existing_sliders:
@@ -260,7 +275,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
 
     tasks_to_run = []
     if regen_last24h:
-        tasks_to_run.extend(t for t in tasks if t[2] == last24h_path)
+        tasks_to_run.extend(t for t in tasks if t[2] in last24h_paths)
 
     if regen_sliders:
         log.info("Regenerating all slider frames (3-day interval or first run)")

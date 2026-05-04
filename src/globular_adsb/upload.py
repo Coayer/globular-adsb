@@ -55,10 +55,12 @@ def upload_heatmaps(dist_dir: Path) -> None:
     heatmap = dist_dir / "heatmaps" / "heatmap_last24h.webp"
     if _recent(heatmap):
         upload_file(heatmap, "heatmaps/heatmap_last24h.webp")
+    all_heatmap = dist_dir / "heatmaps" / "heatmap_all_last24h.webp"
+    if _recent(all_heatmap):
+        upload_file(all_heatmap, "heatmaps/heatmap_all_last24h.webp")
     video = dist_dir / "heatmaps" / "heatmap_animation.webm"
     if _recent(video):
         upload_file(video, "heatmaps/heatmap_animation.webm")
     mp4 = dist_dir / "heatmaps" / "heatmap_animation.mp4"
     if _recent(mp4):
         upload_file(mp4, "heatmaps/heatmap_animation.mp4")
-    # upload_file(airports_csv, "airports.csv")

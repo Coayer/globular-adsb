@@ -9,9 +9,9 @@ from FlightRadar24.api import FlightRadar24API
 
 log = logging.getLogger(__name__)
 
-LAT_STEP = 30
-LON_STEP = 60
-OVERLAP = 10
+LAT_STEP = 15
+LON_STEP = 30
+OVERLAP = 5
 DIST_MIN = 3700
 DIST_MAX = 8000
 SPEED_MIN = 300

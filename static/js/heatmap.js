@@ -54,6 +54,9 @@ export async function initHeatmap() {
 
     let bordermapTexture = null;
     let last24hTexture = null;
+    let allLast24hTexture = null;
+
+    const allFlightsToggle = document.getElementById('all-flights-toggle');
 
     function setLiveTrafficEnabled(enabled) {
         state.liveTrafficEnabled = enabled;
@@ -66,6 +69,13 @@ export async function initHeatmap() {
         bordermapToggle.disabled = disabled;
         bordermapToggle.closest('label').style.opacity = disabled ? '0.4' : '';
         bordermapToggle.closest('label').style.pointerEvents = disabled ? 'none' : '';
+    }
+
+    function setAllFlightsDisabled(disabled) {
+        allFlightsToggle.disabled = disabled;
+        const wrap = document.getElementById('all-flights-seg-wrap');
+        wrap.style.opacity = disabled ? '0.4' : '';
+        wrap.style.pointerEvents = disabled ? 'none' : '';
     }
 
     function buildDayTicks() {
@@ -91,24 +101,43 @@ export async function initHeatmap() {
     const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
     const yday = new Date();
     yday.setUTCDate(yday.getUTCDate() - 1);
-    last24hBtn.textContent = `${String(yday.getUTCDate()).padStart(2, '0')}${months[yday.getUTCMonth()]}${yday.getUTCFullYear()}`;
+    last24hBtn.textContent = `${String(yday.getUTCDate()).padStart(2, '0')} ${months[yday.getUTCMonth()]} · 24H`;
 
     function loadLast24h() {
-        if (last24hTexture) {
-            material.uniforms.heatmapTexture.value = last24hTexture;
-            return;
+        const allFlights = allFlightsToggle.checked;
+        if (allFlights) {
+            if (allLast24hTexture) {
+                material.uniforms.heatmapTexture.value = allLast24hTexture;
+                return;
+            }
+            const url = `${ASSETS_BASE}/heatmaps/heatmap_all_last24h.webp?t=${Math.floor(Date.now() / 3600000)}`;
+            fetch(url)
+                .then(r => r.blob())
+                .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none' }))
+                .then(bitmap => {
+                    const tex = new THREE.CanvasTexture(bitmap);
+                    tex.flipY = false;
+                    globe.renderer().initTexture(tex);
+                    allLast24hTexture = tex;
+                    material.uniforms.heatmapTexture.value = tex;
+                });
+        } else {
+            if (last24hTexture) {
+                material.uniforms.heatmapTexture.value = last24hTexture;
+                return;
+            }
+            const url = `${ASSETS_BASE}/heatmaps/heatmap_last24h.webp?t=${Math.floor(Date.now() / 3600000)}`;
+            fetch(url)
+                .then(r => r.blob())
+                .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none' }))
+                .then(bitmap => {
+                    const tex = new THREE.CanvasTexture(bitmap);
+                    tex.flipY = false;
+                    globe.renderer().initTexture(tex);
+                    last24hTexture = tex;
+                    material.uniforms.heatmapTexture.value = tex;
+                });
         }
-        const url = `${ASSETS_BASE}/heatmaps/heatmap_last24h.webp?t=${Math.floor(Date.now() / 3600000)}`;
-        fetch(url)
-            .then(r => r.blob())
-            .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none' }))
-            .then(bitmap => {
-                const tex = new THREE.CanvasTexture(bitmap);
-                tex.flipY = false;
-                globe.renderer().initTexture(tex);
-                last24hTexture = tex;
-                material.uniforms.heatmapTexture.value = tex;
-            });
     }
 
     state.onTimelapseAirportClick = () => {
@@ -117,6 +146,7 @@ export async function initHeatmap() {
         videoPlayBtn.textContent = '▶ PLAY';
         videoTimeSlider.disabled = true;
         setBordermapDisabled(false);
+        setAllFlightsDisabled(false);
         last24hBtn.classList.add('active');
         state.timelapseIsPlaying = false;
         refreshBusiestKey();
@@ -133,6 +163,7 @@ export async function initHeatmap() {
         videoPlayBtn.textContent = '▶ PLAY';
         videoTimeSlider.disabled = true;
         setBordermapDisabled(false);
+        setAllFlightsDisabled(false);
         loadLast24h();
     });
 
@@ -192,6 +223,7 @@ export async function initHeatmap() {
         animationVideo.play();
         videoPlayBtn.textContent = '⏸ PAUSE';
         setBordermapDisabled(true);
+        setAllFlightsDisabled(true);
     }
 
     videoDownloadBtn.addEventListener('click', loadAndPlayVideo);
@@ -237,6 +269,7 @@ export async function initHeatmap() {
             videoPlayBtn.textContent = '▶ PLAY';
             videoTimeSlider.disabled = true;
             setBordermapDisabled(false);
+            setAllFlightsDisabled(false);
             last24hBtn.classList.add('active');
             state.timelapseIsPlaying = false;
             refreshBusiestKey();
@@ -263,6 +296,14 @@ export async function initHeatmap() {
         material.uniforms.bordermapEnabled.value = e.target.checked ? 1.0 : 0.0;
     });
 
+    allFlightsToggle.addEventListener('change', () => {
+        if (last24hBtn.classList.contains('active')) {
+            loadLast24h();
+        }
+    });
+
+    const allFlightsSegWrap = document.getElementById('all-flights-seg-wrap');
+
     document.getElementById('heatmap-enable-toggle').addEventListener('change', e => {
         state.heatmapEnabled = e.target.checked;
         if (!state.heatmapEnabled) {
@@ -272,6 +313,7 @@ export async function initHeatmap() {
             material.uniforms.heatmapMode.value = 0.0;
             material.uniforms.heatmapTexture.value = blankTexture;
             liveTrafficLabel.style.display = 'none';
+            allFlightsSegWrap.style.display = 'none';
             setBordermapDisabled(false);
             setLiveTrafficEnabled(true);
             state.timelapseIsPlaying = false;
@@ -286,6 +328,7 @@ export async function initHeatmap() {
             refreshLongestKey();
             loadLast24h();
             liveTrafficLabel.style.display = '';
+            allFlightsSegWrap.style.display = '';
         }
     });
 

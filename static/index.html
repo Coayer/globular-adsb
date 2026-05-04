@@ -53,31 +53,26 @@
                 </div>
             </div>
             <div id="bottom-row">
-                <label id="airports-label">
-                    <span>Airports</span>
-                    <input type="checkbox" id="airports-toggle" />
-                </label>
-                <label id="bordermap-label">
-                    <span>Borders</span>
-                    <input type="checkbox" id="bordermap-toggle" />
-                </label>
-                <label id="autopilot-label">
-                    <span>Autopilot</span>
-                    <input type="checkbox" id="autopilot-toggle" />
-                </label>
-                <label id="heatmap-enable-label">
-                    <span>Heatmap</span>
-                    <input type="checkbox" id="heatmap-enable-toggle" checked />
-                </label>
-                <label id="heatmap-label">
-                    <span>LIVE TRAFFIC</span>
-                    <input type="checkbox" id="heatmap-toggle" checked />
-                </label>
+                <label id="airports-label" class="chip">AIRPORTS<input type="checkbox" id="airports-toggle" /></label>
+                <label id="bordermap-label" class="chip">BORDERS<input type="checkbox" id="bordermap-toggle" /></label>
+                <label id="autopilot-label" class="chip">AUTOPILOT<input type="checkbox" id="autopilot-toggle" /></label>
+                <div class="seg-ctrl" id="heatmap-enable-seg">
+                    <button class="seg-btn" id="seg-satellite">SATELLITE</button>
+                    <button class="seg-btn active" id="seg-heatmap">HEATMAP</button>
+                </div>
+                <div id="all-flights-seg-wrap">
+                    <div class="seg-ctrl">
+                        <button class="seg-btn active" id="seg-longhaul">LONG-HAUL</button>
+                        <button class="seg-btn" id="seg-shorthaul">ALL FLIGHTS</button>
+                    </div>
+                    <input type="checkbox" id="all-flights-toggle" style="display:none" />
+                </div>
+                <label id="heatmap-label" class="chip">LIVE TRAFFIC<input type="checkbox" id="heatmap-toggle" checked /></label>
+                <input type="checkbox" id="heatmap-enable-toggle" checked style="display:none" />
                 <div id="heatmap-extra" class="visible">
-                    <span class="ctrl-sep">|</span>
                     <button id="last24h-btn">YDAY</button>
                     <span class="ctrl-sep">|</span>
-                    <button id="video-download-btn">↓ TIMELAPSE<span class="btn-approx"> · APPROX 50MB</span></button>
+                    <button id="video-download-btn">↓ LONG-HAUL TIMELAPSE<span class="btn-approx"> · APPROX 50MB</span></button>
                     <div id="heatmap-progress">
                         <div id="heatmap-progress-bar">
                             <div id="heatmap-progress-fill"></div>
@@ -92,6 +87,39 @@
                 </div>
             </div>
         </div>
+        <script>
+        (function () {
+            function wireSegCtrl(segId, toggleId, activeIndex) {
+                var seg = document.getElementById(segId);
+                var toggle = document.getElementById(toggleId);
+                var btns = seg.querySelectorAll('.seg-btn');
+                btns.forEach(function (btn, i) {
+                    btn.addEventListener('click', function () {
+                        btns.forEach(function (b, j) { b.classList.toggle('active', j === i); });
+                        var next = (i === activeIndex);
+                        if (toggle.checked !== next) {
+                            toggle.checked = next;
+                            toggle.dispatchEvent(new Event('change'));
+                        }
+                    });
+                });
+            }
+            wireSegCtrl('heatmap-enable-seg', 'heatmap-enable-toggle', 1);
+            var allFlightsSeg = document.querySelector('#all-flights-seg-wrap .seg-ctrl');
+            var allFlightsToggle = document.getElementById('all-flights-toggle');
+            var afBtns = allFlightsSeg.querySelectorAll('.seg-btn');
+            afBtns.forEach(function (btn, i) {
+                btn.addEventListener('click', function () {
+                    afBtns.forEach(function (b, j) { b.classList.toggle('active', j === i); });
+                    var next = (i === 1);
+                    if (allFlightsToggle.checked !== next) {
+                        allFlightsToggle.checked = next;
+                        allFlightsToggle.dispatchEvent(new Event('change'));
+                    }
+                });
+            });
+        })();
+        </script>
         <script src="js/script.js" type="module"></script>
         <script
             defer
