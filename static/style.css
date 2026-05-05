@@ -82,8 +82,11 @@ body, #globeViz, canvas {
     background: rgba(0, 180, 220, 0.1);
     color: rgba(0, 180, 220, 0.85);
 }
-#all-flights-seg-wrap {
+#heatmap-mode-seg {
     display: inline-flex;
+}
+.seg-short {
+    display: none;
 }
 #bottom-row {
     display: flex;
@@ -493,18 +496,33 @@ button, label, input[type="checkbox"], input[type="range"] {
         box-sizing: border-box;
     }
 
-    #heatmap-enable-seg, #all-flights-seg-wrap {
+    #airports-label {
+        order: 1;
+    }
+    #bordermap-label {
+        order: 2;
+    }
+    #autopilot-label {
+        order: 3;
+    }
+    #heatmap-label {
+        order: 4;
+    }
+    #heatmap-mode-seg {
+        order: 5;
         grid-column: 1 / -1;
         width: 100%;
     }
-    #heatmap-enable-seg {
-        width: 100%;
+    #heatmap-extra {
+        order: 6;
     }
-    #heatmap-enable-seg .seg-btn, #all-flights-seg-wrap .seg-btn {
+    #heatmap-mode-seg .seg-btn {
         flex: 1;
         padding: 8px 10px;
         font-size: 0.85em;
     }
+    .seg-short { display: inline; }
+    .seg-long { display: none; }
 
     #heatmap-extra {
         grid-column: 1 / -1;

@@ -73,9 +73,11 @@ export async function initHeatmap() {
 
     function setAllFlightsDisabled(disabled) {
         allFlightsToggle.disabled = disabled;
-        const wrap = document.getElementById('all-flights-seg-wrap');
-        wrap.style.opacity = disabled ? '0.4' : '';
-        wrap.style.pointerEvents = disabled ? 'none' : '';
+        const btns = document.getElementById('heatmap-mode-seg').querySelectorAll('.seg-btn');
+        [btns[1], btns[2]].forEach(btn => {
+            btn.style.opacity = disabled ? '0.4' : '';
+            btn.style.pointerEvents = disabled ? 'none' : '';
+        });
     }
 
     function buildDayTicks() {
@@ -297,12 +299,10 @@ export async function initHeatmap() {
     });
 
     allFlightsToggle.addEventListener('change', () => {
-        if (last24hBtn.classList.contains('active')) {
+        if (state.heatmapEnabled && last24hBtn.classList.contains('active')) {
             loadLast24h();
         }
     });
-
-    const allFlightsSegWrap = document.getElementById('all-flights-seg-wrap');
 
     document.getElementById('heatmap-enable-toggle').addEventListener('change', e => {
         state.heatmapEnabled = e.target.checked;
@@ -313,7 +313,6 @@ export async function initHeatmap() {
             material.uniforms.heatmapMode.value = 0.0;
             material.uniforms.heatmapTexture.value = blankTexture;
             liveTrafficLabel.style.display = 'none';
-            allFlightsSegWrap.style.display = 'none';
             setBordermapDisabled(false);
             setLiveTrafficEnabled(true);
             state.timelapseIsPlaying = false;
@@ -328,7 +327,6 @@ export async function initHeatmap() {
             refreshLongestKey();
             loadLast24h();
             liveTrafficLabel.style.display = '';
-            allFlightsSegWrap.style.display = '';
         }
     });
 

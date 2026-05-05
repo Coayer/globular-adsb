@@ -15,10 +15,10 @@ let busiestBodyOpen = !isMobile;
 let longestBodyOpen = !isMobile;
 
 function updateBusiestToggleText() {
-    busiestKeyToggle.textContent = `long-haul flights ${busiestBodyOpen ? '[-]' : '[+]'}`;
+    busiestKeyToggle.textContent = `long-haul hubs ${busiestBodyOpen ? '[-]' : '[+]'}`;
 }
 function updateLongestToggleText() {
-    longestKeyToggle.textContent = `longest flights ${longestBodyOpen ? '[-]' : '[+]'}`;
+    longestKeyToggle.textContent = `max distances ${longestBodyOpen ? '[-]' : '[+]'}`;
 }
 updateBusiestToggleText();
 updateLongestToggleText();

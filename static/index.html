@@ -82,7 +82,7 @@
             </div>
             <div id="bottom-row">
                 <label id="airports-label" class="chip"
-                    >INTERNATIONAL AIRPORTS<input
+                    ><span class="seg-long">INTERNATIONAL AIRPORTS</span><span class="seg-short">INT'L AIRPORTS</span><input
                         type="checkbox"
                         id="airports-toggle"
                 /></label>
@@ -92,32 +92,25 @@
                 <label id="autopilot-label" class="chip"
                     >AUTOPILOT<input type="checkbox" id="autopilot-toggle"
                 /></label>
-                <div class="seg-ctrl" id="heatmap-enable-seg">
+                <div class="seg-ctrl" id="heatmap-mode-seg">
                     <button class="seg-btn" id="seg-satellite">
-                        SATELLITE
+                        <span class="seg-long">SATELLITE</span><span class="seg-short">SAT</span>
                     </button>
-                    <button class="seg-btn active" id="seg-heatmap">
-                        HEATMAP
+                    <button class="seg-btn active" id="seg-allflights">
+                        <span class="seg-long">HEATMAP: ALL FLIGHTS</span><span class="seg-short">HEATMAP: ALL</span>
+                    </button>
+                    <button class="seg-btn" id="seg-longhaul">
+                        <span class="seg-long">HEATMAP: LONG-HAUL</span><span class="seg-short">HEATMAP: LONG</span>
                     </button>
                 </div>
-                <div id="all-flights-seg-wrap">
-                    <div class="seg-ctrl">
-                        <button class="seg-btn active" id="seg-shorthaul">
-                            ALL FLIGHTS
-                        </button>
-                        <button class="seg-btn" id="seg-longhaul">
-                            LONG-HAUL
-                        </button>
-                    </div>
-                    <input
-                        type="checkbox"
-                        id="all-flights-toggle"
-                        style="display: none"
-                        checked
-                    />
-                </div>
+                <input
+                    type="checkbox"
+                    id="all-flights-toggle"
+                    style="display: none"
+                    checked
+                />
                 <label id="heatmap-label" class="chip"
-                    >LIVE TRAFFIC<input
+                    ><span class="seg-long">LIVE LONG-HAUL TRAFFIC</span><span class="seg-short">LIVE TRAFFIC</span><input
                         type="checkbox"
                         id="heatmap-toggle"
                         checked
@@ -132,7 +125,7 @@
                     <button id="last24h-btn">YDAY</button>
                     <span class="ctrl-sep">|</span>
                     <button id="video-download-btn">
-                        ↓ 72-HOUR TIMELAPSE<span class="btn-approx">
+                        ↓ 72H TIMELAPSE<span class="btn-approx">
                             | ~50MB</span
                         >
                     </button>
@@ -159,38 +152,23 @@
         </div>
         <script>
             (function () {
-                function wireSegCtrl(segId, toggleId, activeIndex) {
-                    var seg = document.getElementById(segId);
-                    var toggle = document.getElementById(toggleId);
-                    var btns = seg.querySelectorAll(".seg-btn");
-                    btns.forEach(function (btn, i) {
-                        btn.addEventListener("click", function () {
-                            btns.forEach(function (b, j) {
-                                b.classList.toggle("active", j === i);
-                            });
-                            var next = i === activeIndex;
-                            if (toggle.checked !== next) {
-                                toggle.checked = next;
-                                toggle.dispatchEvent(new Event("change"));
-                            }
-                        });
-                    });
-                }
-                wireSegCtrl("heatmap-enable-seg", "heatmap-enable-toggle", 1);
-                var allFlightsSeg = document.querySelector(
-                    "#all-flights-seg-wrap .seg-ctrl",
-                );
-                var allFlightsToggle =
-                    document.getElementById("all-flights-toggle");
-                var afBtns = allFlightsSeg.querySelectorAll(".seg-btn");
-                afBtns.forEach(function (btn, i) {
+                var seg = document.getElementById("heatmap-mode-seg");
+                var btns = seg.querySelectorAll(".seg-btn");
+                var heatmapEnableToggle = document.getElementById("heatmap-enable-toggle");
+                var allFlightsToggle = document.getElementById("all-flights-toggle");
+                btns.forEach(function (btn, i) {
                     btn.addEventListener("click", function () {
-                        afBtns.forEach(function (b, j) {
+                        btns.forEach(function (b, j) {
                             b.classList.toggle("active", j === i);
                         });
-                        var next = i === 0;
-                        if (allFlightsToggle.checked !== next) {
-                            allFlightsToggle.checked = next;
+                        var heatmapOn = i !== 0;
+                        var allFlights = i <= 1;
+                        if (heatmapEnableToggle.checked !== heatmapOn) {
+                            heatmapEnableToggle.checked = heatmapOn;
+                            heatmapEnableToggle.dispatchEvent(new Event("change"));
+                        }
+                        if (allFlightsToggle.checked !== allFlights) {
+                            allFlightsToggle.checked = allFlights;
                             allFlightsToggle.dispatchEvent(new Event("change"));
                         }
                     });
