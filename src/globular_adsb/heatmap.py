@@ -80,9 +80,7 @@ def build_heatmap(
         x, y = latlon_to_xy(f["latitude"], f["longitude"])
         density[max(0, y - r) : y + r + 1, max(0, x - r) : x + r + 1] += 1.0
 
-    log.info(
-        "%d plotted, %d skipped", len(flights) - skipped, skipped
-    )
+    log.info("%d plotted, %d skipped", len(flights) - skipped, skipped)
     return density
 
 
@@ -117,24 +115,26 @@ def density_to_rgba(density: np.ndarray) -> np.ndarray:
 
 
 def _expected_frame_paths(output_dir: Path) -> set[Path]:
-    paths = {output_dir / "heatmap_last24h.webp", output_dir / "heatmap_all_last24h.webp"}
+    frames_dir = output_dir / "frames"
+    paths = set()
     max_n = TOTAL_HOURS - WINDOW_HOURS
     n = 1.0
     while n <= max_n + 1e-9:
         n_r = round(n, 10)
-        paths.add(output_dir / f"heatmap_{n_r:g}h.webp")
+        paths.add(frames_dir / f"heatmap_{n_r:g}h.webp")
         n = round(n + STEP_HOURS, 10)
     return paths
 
 
 def needs_regeneration(output_dir: Path) -> bool:
+    frames_dir = output_dir / "frames"
     if not (output_dir / "heatmap_animation.webm").exists():
         return True
     if not (output_dir / "heatmap_animation.mp4").exists():
         return True
 
     expected = _expected_frame_paths(output_dir)
-    existing = set(output_dir.glob("heatmap_*.webp"))
+    existing = set(frames_dir.glob("heatmap_*.webp"))
 
     if expected - existing:
         return True
@@ -151,8 +151,7 @@ def needs_regeneration(output_dir: Path) -> bool:
         if not p.exists() or p.stat().st_mtime < midnight_ts:
             return True
 
-    last24h_paths = {output_dir / "heatmap_last24h.webp", output_dir / "heatmap_all_last24h.webp"}
-    slider_frames = existing - last24h_paths
+    slider_frames = existing
     if slider_frames:
         newest_mtime = max(p.stat().st_mtime for p in slider_frames)
         three_day_ts = midnight_ts - 2 * 86400
@@ -169,7 +168,7 @@ def run_window(
     start_hours: float,
     end_hours: float,
     quality: int = QUALITY_VIDEO_SOURCE,
-    longhaul_only: bool = True,
+    longhaul_only: bool = False,
 ) -> Path:
     # Subprocess workers don't inherit handlers from the parent process.
     from globular_adsb.pipeline import _LOG_DATE, _LOG_FORMAT
@@ -198,6 +197,8 @@ def run_window(
 
 def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     output_dir.mkdir(exist_ok=True)
+    frames_dir = output_dir / "frames"
+    frames_dir.mkdir(exist_ok=True)
     airports = load_airports(airports_csv)
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
@@ -239,10 +240,11 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
             (
                 archive_dir,
                 airports,
-                output_dir / f"heatmap_{n_r:g}h.webp",
+                frames_dir / f"heatmap_{n_r:g}h.webp",
                 start_h,
                 start_h + WINDOW_HOURS,
                 QUALITY_VIDEO_SOURCE,
+                False,
             )
         )
         n = round(n + STEP_HOURS, 10)
@@ -250,7 +252,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     expected_paths = {t[2] for t in tasks}
 
     # Remove extraneous files not in the expected set.
-    for p in sorted(output_dir.glob("heatmap_*.webp")):
+    for p in sorted(frames_dir.glob("heatmap_*.webp")):
         if p not in expected_paths:
             log.warning("Removing extraneous frame: %s", p.name)
             p.unlink()
@@ -287,7 +289,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         log.info("All frames up to date.")
         if not video_path.exists():
             encode_animation_video(
-                output_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
+                frames_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
             )
         return []
 
@@ -300,13 +302,13 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
 
     if regen_sliders:
         encode_animation_video(
-            output_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
+            frames_dir, video_path, darkmap_path=output_dir.parent / "darkmap.jpg"
         )
     return outputs
 
 
 def encode_animation_video(
-    output_dir: Path,
+    frames_dir: Path,
     output_path: Path,
     fps: int = 24,
     *,
@@ -320,7 +322,7 @@ def encode_animation_video(
     n = 1.0
     while n <= max_n + 1e-9:
         n_r = round(n, 10)
-        p = output_dir / f"heatmap_{n_r:g}h.webp"
+        p = frames_dir / f"heatmap_{n_r:g}h.webp"
         if p.exists():
             frame_paths.append(p)
         n = round(n + STEP_HOURS, 10)
@@ -329,7 +331,7 @@ def encode_animation_video(
         log.warning("No slider frames found — skipping animation video")
         return
 
-    concat_list = output_dir / "_concat.txt"
+    concat_list = frames_dir / "_concat.txt"
     try:
         with open(concat_list, "w") as f:
             for path in frame_paths:

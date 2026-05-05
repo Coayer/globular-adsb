@@ -340,12 +340,14 @@ export async function initHeatmap() {
         .globeMaterial(material)
         .backgroundImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png');
 
-    Promise.all([
-        new TextureLoader().loadAsync(`${ASSETS_BASE}/daymap.webp`),
-        new TextureLoader().loadAsync(`${ASSETS_BASE}/nightmap.webp`),
-    ]).then(([dayTex, nightTex]) => {
-        material.uniforms.dayTexture.value = dayTex;
-        material.uniforms.nightTexture.value = nightTex;
+    (window.requestIdleCallback || (cb => setTimeout(cb, 3000)))(() => {
+        Promise.all([
+            new TextureLoader().loadAsync(`${ASSETS_BASE}/daymap.webp`),
+            new TextureLoader().loadAsync(`${ASSETS_BASE}/nightmap.webp`),
+        ]).then(([dayTex, nightTex]) => {
+            material.uniforms.dayTexture.value = dayTex;
+            material.uniforms.nightTexture.value = nightTex;
+        });
     });
 
     function animate() {
