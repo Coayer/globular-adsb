@@ -15,7 +15,7 @@ let busiestBodyOpen = !isMobile;
 let longestBodyOpen = !isMobile;
 
 function updateBusiestToggleText() {
-    busiestKeyToggle.textContent = `busiest airports ${busiestBodyOpen ? '[-]' : '[+]'}`;
+    busiestKeyToggle.textContent = `long-haul flights ${busiestBodyOpen ? '[-]' : '[+]'}`;
 }
 function updateLongestToggleText() {
     longestKeyToggle.textContent = `longest flights ${longestBodyOpen ? '[-]' : '[+]'}`;

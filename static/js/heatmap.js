@@ -101,7 +101,7 @@ export async function initHeatmap() {
     const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
     const yday = new Date();
     yday.setUTCDate(yday.getUTCDate() - 1);
-    last24hBtn.textContent = `${String(yday.getUTCDate()).padStart(2, '0')} ${months[yday.getUTCMonth()]} · 24H`;
+    last24hBtn.textContent = `24H / ${String(yday.getUTCDate()).padStart(2, '0')} ${months[yday.getUTCMonth()]}`;
 
     function loadLast24h() {
         const allFlights = allFlightsToggle.checked;
@@ -172,7 +172,7 @@ export async function initHeatmap() {
     const supportsVp9 = !isDesktopFirefox && window.innerWidth > 1440 &&
         document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
     const btnApprox = videoDownloadBtn.querySelector('.btn-approx');
-    if (btnApprox) btnApprox.textContent = supportsVp9 ? ' · APPROX 50MB' : ' · APPROX 15MB';
+    if (btnApprox) btnApprox.textContent = supportsVp9 ? ' / ~50MB' : ' / ~15MB';
 
     async function fetchWithProgress(url, mimeType) {
         const response = await fetch(url);
