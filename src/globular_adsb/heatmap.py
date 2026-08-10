@@ -154,8 +154,8 @@ def needs_regeneration(output_dir: Path) -> bool:
     slider_frames = existing
     if slider_frames:
         newest_mtime = max(p.stat().st_mtime for p in slider_frames)
-        three_day_ts = midnight_ts - 2 * 86400
-        if newest_mtime < three_day_ts:
+        weekly_ts = midnight_ts - 6 * 86400
+        if newest_mtime < weekly_ts:
             return True
 
     return False
@@ -264,14 +264,14 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
     if regen_last24h:
         log.info("Daily heatmaps missing or pre-date midnight — regenerating")
 
-    # Slider frames: full regeneration every 3 days only.
-    three_day_ts = midnight_ts - 2 * 86400
+    # Slider frames: full regeneration every 7 days only.
+    weekly_ts = midnight_ts - 6 * 86400
     slider_tasks = [t for t in tasks if t[2] not in last24h_paths]
     existing_sliders = {t[2] for t in slider_tasks if t[2].exists()}
 
     if existing_sliders:
         newest_slider_mtime = max(p.stat().st_mtime for p in existing_sliders)
-        regen_sliders = newest_slider_mtime < three_day_ts
+        regen_sliders = newest_slider_mtime < weekly_ts
     else:
         regen_sliders = True
 
@@ -280,7 +280,7 @@ def run(archive_dir: Path, airports_csv: Path, output_dir: Path) -> list[Path]:
         tasks_to_run.extend(t for t in tasks if t[2] in last24h_paths)
 
     if regen_sliders:
-        log.info("Regenerating all slider frames (3-day interval or first run)")
+        log.info("Regenerating all slider frames (7-day interval or first run)")
         tasks_to_run.extend(slider_tasks)
 
     video_path = output_dir / "heatmap_animation.webm"

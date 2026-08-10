@@ -383,6 +383,28 @@ fetch("/mono_bold.json")
     .then((r) => r.json())
     .then((typeface) => globe.labelTypeFace(typeface));
 
+// PerspectiveCamera's fov is vertical and fixed by three.js's default (50deg),
+// so shrinking the window's width alone narrows the horizontal FOV and crops
+// the globe instead of scaling it down. Widen the fov to compensate whenever
+// the viewport is narrower than it is tall, so the globe always fits.
+const BASE_FOV = 50;
+
+function fitCameraFov(width, height) {
+    const camera = globe.camera();
+    const aspect = width / height;
+    if (aspect < 1) {
+        const baseFovRad = (BASE_FOV * Math.PI) / 180;
+        const fittedFovRad = 2 * Math.atan(Math.tan(baseFovRad / 2) / aspect);
+        camera.fov = (fittedFovRad * 180) / Math.PI;
+    } else {
+        camera.fov = BASE_FOV;
+    }
+    camera.updateProjectionMatrix();
+}
+
+fitCameraFov(window.innerWidth, window.innerHeight);
+
 window.addEventListener("resize", () => {
     globe.width(window.innerWidth).height(window.innerHeight);
+    fitCameraFov(window.innerWidth, window.innerHeight);
 });

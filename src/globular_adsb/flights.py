@@ -9,9 +9,23 @@ from FlightRadar24.api import FlightRadar24API
 
 log = logging.getLogger(__name__)
 
-LAT_STEP = 15
-LON_STEP = 30
-OVERLAP = 5
+LAT_STEP_COARSE = 20
+LON_STEP_COARSE = 40
+LAT_STEP_DENSE = 5
+LON_STEP_DENSE = 10
+OVERLAP = 3
+OVERLAP_COARSE = 8
+
+# (south, north, west, east) bounding boxes for high-traffic airspace
+DENSE_ZONES = [
+    (24, 50, -125, -65),  # Continental US
+    (35, 62, -10, 32),  # Western Europe
+    (3, 47, 100, 145),  # East Asia: China coast, S Korea, Japan
+    (1, 3, 103, 106),  # Singapore
+    (-40, -20, 140, 155),  # Eastern Australia
+    (-47, -34, 166, 178),  # New Zealand
+]
+
 DIST_MIN = 3700
 DIST_MAX = 8000
 SPEED_MIN = 300
@@ -56,22 +70,57 @@ def is_longhaul(flight: dict, airports: dict[str, tuple[float, float]]) -> bool:
     return haversine_km(*airports[origin], *airports[dest]) >= DIST_MIN
 
 
-def build_bounds_grid(overlap: float = 0) -> list[str]:
-    """Return "y1,y2,x1,x2" strings tiling the globe with optional overlap."""
-    bounds = []
-    lat = 85
-    while lat > -85:
-        lat_bottom = max(lat - LAT_STEP, -85)
+def _in_dense_zone(lat: float, lon: float) -> bool:
+    return any(
+        south <= lat <= north and west <= lon <= east
+        for south, north, west, east in DENSE_ZONES
+    )
+
+
+def _tile(
+    lat_top: float, lat_bot: float, lon_left: float, lon_right: float, overlap: float
+) -> str:
+    y1 = min(lat_top + overlap, 90)
+    y2 = max(lat_bot - overlap, -90)
+    x1 = max(lon_left - overlap, -180)
+    x2 = min(lon_right + overlap, 180)
+    return f"{y1},{y2},{x1},{x2}"
+
+
+def build_bounds_grid(
+    overlap: float = 0, overlap_coarse: float | None = None
+) -> list[str]:
+    """Return "y1,y2,x1,x2" strings tiling the globe with adaptive resolution.
+
+    Dense airspace zones (US, Europe, Australasia) use fine tiles; oceans and
+    sparsely trafficked regions use coarse tiles.
+    """
+    if overlap_coarse is None:
+        overlap_coarse = overlap
+    bounds: list[str] = []
+
+    for south, north, west, east in DENSE_ZONES:
+        lat = north
+        while lat > south:
+            lat_bot = max(lat - LAT_STEP_DENSE, south)
+            lon = west
+            while lon < east:
+                lon_right = min(lon + LON_STEP_DENSE, east)
+                bounds.append(_tile(lat, lat_bot, lon, lon_right, overlap))
+                lon = lon_right
+            lat = lat_bot
+
+    lat = 90
+    while lat > -90:
+        lat_bot = max(lat - LAT_STEP_COARSE, -90)
         lon = -180
         while lon < 180:
-            lon_right = min(lon + LON_STEP, 180)
-            y1 = min(lat + overlap, 85)
-            y2 = max(lat_bottom - overlap, -85)
-            x1 = max(lon - overlap, -180)
-            x2 = min(lon_right + overlap, 180)
-            bounds.append(f"{y1},{y2},{x1},{x2}")
+            lon_right = min(lon + LON_STEP_COARSE, 180)
+            if not _in_dense_zone((lat + lat_bot) / 2, (lon + lon_right) / 2):
+                bounds.append(_tile(lat, lat_bot, lon, lon_right, overlap_coarse))
             lon = lon_right
-        lat = lat_bottom
+        lat = lat_bot
+
     return bounds
 
 
@@ -135,8 +184,10 @@ def run(archive_dir: Path, dist_dir: Path, airports_csv: Path) -> Path:
     purge_old_archives(archive_dir)
 
     fr_api = FlightRadar24API()
-    grid = build_bounds_grid(overlap=OVERLAP)
-    flights, _ = fetch_flights_for_grid(fr_api, grid, f"{OVERLAP}° overlap")
+    grid = build_bounds_grid(overlap=OVERLAP, overlap_coarse=OVERLAP_COARSE)
+    flights, _ = fetch_flights_for_grid(
+        fr_api, grid, f"adaptive grid ({OVERLAP}°/{OVERLAP_COARSE}° overlap)"
+    )
 
     timestamp = int(time.time())
     payload = {"timestamp": timestamp, "flights": flights}
