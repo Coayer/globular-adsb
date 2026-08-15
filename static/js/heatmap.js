@@ -55,6 +55,7 @@ export async function initHeatmap() {
     let bordermapTexture = null;
     let last24hTexture = null;
     let allLast24hTexture = null;
+    let wasLiveTrafficEnabled = true;
 
     const allFlightsToggle = document.getElementById('all-flights-toggle');
 
@@ -153,6 +154,7 @@ export async function initHeatmap() {
         state.timelapseIsPlaying = false;
         refreshBusiestKey();
         refreshLongestKey();
+        setLiveTrafficEnabled(wasLiveTrafficEnabled);
         loadLast24h();
     };
 
@@ -166,6 +168,7 @@ export async function initHeatmap() {
         videoTimeSlider.disabled = true;
         setBordermapDisabled(false);
         setAllFlightsDisabled(false);
+        setLiveTrafficEnabled(wasLiveTrafficEnabled);
         loadLast24h();
     });
 
@@ -220,6 +223,7 @@ export async function initHeatmap() {
         refreshBusiestKey();
         refreshLongestKey();
         material.uniforms.heatmapTexture.value = animationVideoTexture;
+        wasLiveTrafficEnabled = state.liveTrafficEnabled;
         setLiveTrafficEnabled(false);
         clearSelection();
         animationVideo.play();
