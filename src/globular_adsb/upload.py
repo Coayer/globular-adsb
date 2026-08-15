@@ -45,6 +45,9 @@ def upload_file(local_path: Path, key: str) -> None:
 
 def upload_flights(dist_dir: Path) -> None:
     upload_file(dist_dir / "flights.json", "flights.json")
+    traces = dist_dir / "traces.json"
+    if traces.exists():
+        upload_file(traces, "traces.json")
 
 
 def _recent(path: Path) -> bool:

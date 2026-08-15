@@ -4,7 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from globular_adsb.flights import build_bounds_grid, fetch_flights_for_grid, run
+from globular_adsb.flights import (
+    build_bounds_grid,
+    build_traces,
+    fetch_flights_for_grid,
+    run,
+)
 
 
 def test_build_bounds_grid_covers_globe():
@@ -32,6 +37,7 @@ def test_build_bounds_grid_overlap_expands_bounds():
 def _make_flight(fid: str, lat: float = 51.0, lng: float = 0.0):
     f = MagicMock()
     f.id = fid
+    f.icao_24bit = f"HEX{fid}"
     f.latitude = lat
     f.longitude = lng
     f.heading = 90
@@ -63,17 +69,36 @@ def test_fetch_flights_deduplicates():
     assert ids == {"TEST1", "TEST2"}
 
 
-def test_fetch_flights_handles_api_error():
+def test_fetch_flights_retries_then_succeeds():
     fr_api = MagicMock()
+    # First attempt on the tile fails, the retry succeeds.
     fr_api.get_flights.side_effect = [RuntimeError("timeout"), [_make_flight("1")]]
 
     with patch("globular_adsb.flights.time.sleep"):
-        flights, _ = fetch_flights_for_grid(fr_api, ["bad_tile", "good_tile"], "test")
+        flights, _ = fetch_flights_for_grid(fr_api, ["tile"], "test")
 
     assert len(flights) == 1
+    assert fr_api.get_flights.call_count == 2
 
 
-def test_run_writes_archive_and_dist(tmp_path: Path):
+def test_fetch_flights_gives_up_after_retries():
+    from globular_adsb.flights import MAX_RETRIES
+
+    fr_api = MagicMock()
+    fr_api.get_flights.side_effect = RuntimeError("rate limited")
+
+    with patch("globular_adsb.flights.time.sleep") as sleep:
+        flights, total_raw = fetch_flights_for_grid(fr_api, ["tile"], "test")
+
+    # One initial attempt plus MAX_RETRIES; the tile is skipped, not fatal.
+    assert flights == []
+    assert total_raw == 0
+    assert fr_api.get_flights.call_count == MAX_RETRIES + 1
+    # Backed off once per retry (not after the final give-up).
+    assert sleep.call_count == MAX_RETRIES
+
+
+def test_run_writes_archive_and_dist(tmp_path: Path, airports_csv: Path):
     archive_dir = tmp_path / "archive"
     dist_dir = tmp_path / "dist"
     flight = _make_flight("42")
@@ -86,7 +111,7 @@ def test_run_writes_archive_and_dist(tmp_path: Path):
         patch("globular_adsb.flights.time.sleep"),
         patch("globular_adsb.flights.time.time", return_value=1_700_000_000),
     ):
-        dist_path = run(archive_dir, dist_dir)
+        dist_path = run(archive_dir, dist_dir, airports_csv)
 
     assert dist_path == dist_dir / "flights.json"
     assert dist_path.exists()
@@ -97,3 +122,98 @@ def test_run_writes_archive_and_dist(tmp_path: Path):
     data = json.loads(dist_path.read_text())
     assert "timestamp" in data
     assert len(data["flights"]) == 1
+    assert data["flights"][0]["icao24"] == "HEX42"
+
+    # traces.json is written alongside; a single snapshot yields no drawable trace.
+    traces = json.loads((dist_dir / "traces.json").read_text())
+    assert traces["traces"] == {}
+
+
+def _snapshot(archive_dir: Path, ts: int, flights: list[dict]) -> None:
+    (archive_dir / f"{ts}.json").write_text(
+        json.dumps({"timestamp": ts, "flights": flights})
+    )
+
+
+def _pos(callsign, lat, lon, spd, origin="JFK", dest="LHR", alt=35000):
+    return {
+        "callsign": callsign,
+        "latitude": lat,
+        "longitude": lon,
+        "groundSpeed": spd,
+        "altitude": alt,
+        "originAirportIata": origin,
+        "destinationAirportIata": dest,
+    }
+
+
+def test_build_traces_threads_scopes_and_filters(archive_dir: Path):
+    import time
+
+    now = int(time.time())
+    t1, t2, t3 = now - 3600, now - 1800, now
+
+    # Oldest snapshot written last to confirm output is ordered by time, not by
+    # file iteration order.
+    _snapshot(
+        archive_dir,
+        t3,
+        [
+            _pos("AAA", 51.0, -3.0, 520, alt=38000),
+            _pos("BBB", 40.0, -50.0, 515),
+            _pos("CCC", 45.0, -20.0, 505),  # only appears here -> single point
+            _pos("N/A", 10.0, 10.0, 480),  # blank callsign -> skipped
+        ],
+    )
+    _snapshot(
+        archive_dir,
+        t1,
+        [
+            _pos("AAA", 51.0, -1.0, 480, alt=30000),
+            _pos("BBB", 40.0, -40.0, 500, dest="CDG"),  # wrong leg -> excluded
+        ],
+    )
+    _snapshot(
+        archive_dir,
+        t2,
+        [
+            _pos("AAA", 51.0, -2.0, 500, alt=34000),
+            _pos("BBB", 40.0, -45.0, 510),
+        ],
+    )
+
+    longhaul = [
+        _pos("AAA", 51.0, -3.0, 520, alt=38000),
+        _pos("BBB", 40.0, -50.0, 515),
+        _pos("CCC", 45.0, -20.0, 505),
+        _pos("N/A", 10.0, 10.0, 480),
+    ]
+
+    traces = build_traces(archive_dir, longhaul)
+
+    # AAA: three points threaded in ascending time order, [lat, lon, altitude].
+    assert traces["AAA"] == [
+        [51.0, -1.0, 30000],
+        [51.0, -2.0, 34000],
+        [51.0, -3.0, 38000],
+    ]
+    # BBB: the wrong-leg point (t1) is dropped, leaving two matching-leg points.
+    assert traces["BBB"] == [[40.0, -45.0, 35000], [40.0, -50.0, 35000]]
+    # CCC has a single point and N/A is blank -> neither is drawable.
+    assert "CCC" not in traces
+    assert "N/A" not in traces
+
+
+def test_build_traces_ignores_out_of_window_archives(archive_dir: Path):
+    import time
+
+    now = int(time.time())
+    old = now - 48 * 3600  # older than TRACE_WINDOW_HOURS
+
+    _snapshot(archive_dir, old, [_pos("AAA", 51.0, -1.0, 480)])
+    _snapshot(archive_dir, now, [_pos("AAA", 51.0, -3.0, 520)])
+
+    traces = build_traces(archive_dir, [_pos("AAA", 51.0, -3.0, 520)])
+
+    # Only the in-window snapshot survives -> single point -> nothing drawable.
+    assert traces == {}

@@ -2,8 +2,8 @@ import { globe, isMobile } from './globe.js';
 import { loadAirports, computeAirportObjects } from './airports.js';
 import { state } from './state.js';
 import { clearSelection, selectFlight, selectAirport, refreshBusiestKey } from './selection.js';
-import { refreshFlights, updateObjectsData } from './flights.js';
-import { initHeatmap } from './heatmap.js';
+import { refreshFlights, updateObjectsData, fetchTraces, updateTracePaths } from './flights.js';
+import { initHeatmap, heatmapView } from './heatmap.js';
 import { initAutopilot } from './autopilot.js';
 
 const recenterBtn = document.getElementById('recenter-btn');
@@ -46,6 +46,19 @@ document.getElementById('airports-toggle').addEventListener('change', e => {
     state.airportObjects = state.airportsEnabled ? computeAirportObjects(state.allFlights) : [];
     updateObjectsData();
     refreshBusiestKey();
+});
+
+document.getElementById('traces-toggle').addEventListener('change', e => {
+    state.tracesEnabled = e.target.checked;
+    if (state.tracesEnabled) {
+        // Show the plain dark map (no heatmap overlay) so traces read clearly.
+        heatmapView.enterTracesMode?.();
+        // Only fetch traces.json once the user opts in, to save bandwidth.
+        fetchTraces();
+    } else {
+        updateTracePaths();
+        heatmapView.exitTracesMode?.();
+    }
 });
 
 loadAirports();

@@ -20,6 +20,11 @@ def flights_json():
     return send_from_directory(config.DIST_DIR, "flights.json")
 
 
+@app.route("/traces.json")
+def traces_json():
+    return send_from_directory(config.DIST_DIR, "traces.json")
+
+
 @app.route("/airports.csv")
 def airports():
     return send_from_directory(config.DATA_DIR, "airports.csv")

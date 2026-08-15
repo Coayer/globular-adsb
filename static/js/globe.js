@@ -6,6 +6,7 @@ import {
     DoubleSide,
 } from "https://esm.sh/three";
 import * as THREE from "https://esm.sh/three";
+import { altitudeToColor } from "./constants.js";
 
 export const isMobile = window.innerWidth <= 768;
 
@@ -370,6 +371,23 @@ export const globe = new Globe(document.getElementById("globeViz"))
     )
     .arcStroke(0.5)
     .arcAltitudeAutoScale(0.3)
+    .pathPoints((d) => d.points)
+    .pathPointLat((p) => p[0])
+    .pathPointLng((p) => p[1])
+    .pathColor((d) => {
+        // Points run oldest -> newest. Fade the tail (index 0) toward black so
+        // the line trails off instead of stopping abruptly; the newest ~60% of
+        // the line stays full brightness.
+        const last = d.points.length - 1;
+        return d.points.map((p, i) =>
+            altitudeToColor(p[2], last ? Math.min(1, (i / last) / 0.6) : 1),
+        );
+    })
+    .pathStroke(1.5)
+    // Sit below the aircraft triangles (which are at the flight's altitude,
+    // ~0.0017+ globe-units at cruise) so a trace passes under the plane it trails.
+    .pathPointAlt(0.001)
+    .pathTransitionDuration(0)
     .labelLat((d) => d.lat)
     .labelLng((d) => d.lng)
     .labelText((d) => d.text)

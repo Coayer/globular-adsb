@@ -8,6 +8,10 @@ import { state } from './state.js';
 import { updateObjectsData } from './flights.js';
 import { clearSelection, refreshBusiestKey, refreshLongestKey } from './selection.js';
 
+// Populated by initHeatmap so other modules (traces) can show the plain dark map
+// without touching the heatmap's private textures/material.
+export const heatmapView = {};
+
 export async function initHeatmap() {
     const darkTexture = await new TextureLoader().loadAsync(`${ASSETS_BASE}/darkmap.jpg`);
 
@@ -65,6 +69,25 @@ export async function initHeatmap() {
         updateObjectsData();
         refreshLongestKey();
     }
+
+    // Show the plain dark map (dark base texture, no heatmap overlay) while traces
+    // are enabled, remembering the current heatmap look to restore afterwards.
+    let savedForTraces = null;
+    heatmapView.enterTracesMode = () => {
+        if (savedForTraces) return;
+        savedForTraces = {
+            mode: material.uniforms.heatmapMode.value,
+            tex: material.uniforms.heatmapTexture.value,
+        };
+        material.uniforms.heatmapMode.value = 1.0;
+        material.uniforms.heatmapTexture.value = blankTexture;
+    };
+    heatmapView.exitTracesMode = () => {
+        if (!savedForTraces) return;
+        material.uniforms.heatmapMode.value = savedForTraces.mode;
+        material.uniforms.heatmapTexture.value = savedForTraces.tex;
+        savedForTraces = null;
+    };
 
     function setBordermapDisabled(disabled) {
         bordermapToggle.disabled = disabled;

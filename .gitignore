@@ -9,6 +9,7 @@ __pycache__/
 
 dist/heatmaps/
 dist/flights.json
+dist/traces.json
 
 # Generated data
 archive/

@@ -5,6 +5,8 @@ export const state = {
     liveTrafficEnabled: true,
     airportsEnabled: false,
     airportObjects: [],
+    tracesEnabled: false,
+    traces: {},
     timelapseIsPlaying: false,
     busiestHasData: false,
     longestHasData: false,
