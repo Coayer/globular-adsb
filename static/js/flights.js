@@ -135,6 +135,18 @@ export function fetchTraces() {
         });
 }
 
+export function fetchHubs24h() {
+    return fetch(`${ASSETS_BASE}/hubs24h.json?t=${Date.now()}`)
+        .then(r => r.json())
+        .then(data => {
+            state.hubs24h = data.airports || {};
+            state.hubs24hDay = data.day || '';
+            updateBusiestAirports();
+        })
+        // The panel ranks and renders on live data alone if this never arrives.
+        .catch(err => console.warn('24h hub counts unavailable:', err));
+}
+
 export function updateBusiestAirports() {
     const counts = {};
     for (const f of state.allFlights) {
@@ -148,17 +160,35 @@ export function updateBusiestAirports() {
         }
     }
 
+    // Ranked by the previous UTC day's total where we have it, so the order
+    // matches the column that leads the row. Falls back to the live count until
+    // hubs24h.json lands.
     const sorted = Object.entries(counts)
-        .map(([code, c]) => ({ code, out: c.out, in: c.in, total: c.out + c.in }))
-        .sort((a, b) => b.total - a.total)
+        .map(([code, c]) => {
+            const h = state.hubs24h[code];
+            return {
+                code, out: c.out, in: c.in,
+                day: h ? h.out + h.in : null,
+                total: c.out + c.in,
+            };
+        })
+        .sort((a, b) => (b.day ?? -1) - (a.day ?? -1) || b.total - a.total)
         .slice(0, 10);
 
-    busiestKeyBody.innerHTML = '';
+    // Same UTC day the YDAY heatmap covers; the date itself goes in the tooltip.
+    const dayTitle = state.hubs24hDay
+        ? `Long-haul flights on ${state.hubs24hDay} (UTC)`
+        : 'Long-haul flights over the last full UTC day';
+    busiestKeyBody.innerHTML =
+        '<div class="busiest-row busiest-head"><span class="busiest-rank"></span>' +
+        '<span class="busiest-code">HUB</span><span class="busiest-out">↑NOW</span>' +
+        '<span class="busiest-in">↓NOW</span>' +
+        `<span class="busiest-24h" title="${dayTitle}">24H</span></div>`;
     for (let i = 0; i < sorted.length; i++) {
-        const { code, out } = sorted[i];
+        const { code, out, day } = sorted[i];
         const row = document.createElement('div');
         row.className = 'busiest-row';
-        row.innerHTML = `<span class="busiest-rank">${i + 1}</span><span class="busiest-code">${code}</span><span class="busiest-out">↑${out}</span><span class="busiest-in">↓${sorted[i].in}</span>`;
+        row.innerHTML = `<span class="busiest-rank">${i + 1}</span><span class="busiest-code">${code}</span><span class="busiest-out">↑${out}</span><span class="busiest-in">↓${sorted[i].in}</span><span class="busiest-24h">${day === null ? '·' : day.toLocaleString()}</span>`;
         const btn = document.createElement('button');
         btn.className = 'busiest-select-btn';
         btn.textContent = '❯';

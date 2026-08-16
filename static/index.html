@@ -47,7 +47,7 @@
         </div>
         <div id="controls">
             <div id="arc-key" style="display: none">
-                <div id="arc-key-toggle">ACTIVE ROUTES</div>
+                <div id="arc-key-toggle">ACTIVE LONG-HAUL ROUTES</div>
                 <div id="arc-key-body" class="visible">
                     <span class="key-item"
                         ><span
@@ -85,15 +85,25 @@
                     ><span class="seg-long">INTERNATIONAL AIRPORTS</span><span class="seg-short">INT'L AIRPORTS</span><input
                         type="checkbox"
                         id="airports-toggle"
+                        autocomplete="off"
                 /></label>
                 <label id="bordermap-label" class="chip"
-                    >BORDERS<input type="checkbox" id="bordermap-toggle"
+                    >BORDERS<input
+                        type="checkbox"
+                        id="bordermap-toggle"
+                        autocomplete="off"
                 /></label>
                 <label id="traces-label" class="chip"
-                    >TRACES<input type="checkbox" id="traces-toggle"
+                    >TRACES<input
+                        type="checkbox"
+                        id="traces-toggle"
+                        autocomplete="off"
                 /></label>
                 <label id="autopilot-label" class="chip"
-                    >AUTOPILOT<input type="checkbox" id="autopilot-toggle"
+                    >AUTOPILOT<input
+                        type="checkbox"
+                        id="autopilot-toggle"
+                        autocomplete="off"
                 /></label>
                 <div class="seg-ctrl" id="heatmap-mode-seg">
                     <button class="seg-btn" id="seg-satellite">
@@ -111,21 +121,24 @@
                     id="all-flights-toggle"
                     style="display: none"
                     checked
+                    autocomplete="off"
                 />
                 <label id="heatmap-label" class="chip"
                     ><span class="seg-long">LIVE LONG-HAUL TRAFFIC</span><span class="seg-short">LIVE TRAFFIC</span><input
                         type="checkbox"
                         id="heatmap-toggle"
                         checked
+                        autocomplete="off"
                 /></label>
                 <input
                     type="checkbox"
                     id="heatmap-enable-toggle"
                     checked
                     style="display: none"
+                    autocomplete="off"
                 />
                 <div id="heatmap-extra" class="visible">
-                    <button id="last24h-btn">YDAY</button>
+                    <button id="last24h-btn">24H</button>
                     <span class="ctrl-sep">|</span>
                     <button id="video-download-btn">
                         ↓ 72H TIMELAPSE<span class="btn-approx">

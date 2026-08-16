@@ -415,18 +415,49 @@ button, label, input[type="checkbox"], input[type="range"] {
 .busiest-code {
     font-weight: bold;
     color: #00d4ff;
-    width: 30px;
+    /* IATA codes are always 3 characters. 4ch rather than 3ch because the row
+       adds letter-spacing, which ch does not count; in px this would overflow
+       at the larger mobile font size. */
+    width: 4ch;
     flex-shrink: 0;
 }
+/* min-widths are sized to the widest realistic value (↑128) rather than padded
+   out, so the visible gap between columns matches the max-distances panel.
+   Anything wider simply grows the cell; the values stay right-aligned. */
 .busiest-out {
     color: #00e676;
-    min-width: 36px;
+    min-width: 26px;
     text-align: right;
 }
 .busiest-in {
     color: #ff6d00;
-    min-width: 36px;
+    min-width: 26px;
     text-align: right;
+}
+/* Brightest cell in the row, because it is the one the list is ordered by.
+   The rule marks where "now" ends and the last 24 hours begin. */
+.busiest-24h {
+    color: #d9f6ff;
+    font-weight: bold;
+    min-width: 24px;
+    text-align: right;
+    flex-shrink: 0;
+    padding-left: 4px;
+    border-left: 1px solid rgba(0, 180, 220, 0.25);
+}
+.busiest-head,
+.busiest-head:hover {
+    background: none;
+    border-color: transparent;
+    cursor: default;
+    color: rgba(0, 180, 220, 0.5);
+}
+.busiest-head .busiest-code,
+.busiest-head .busiest-out,
+.busiest-head .busiest-in,
+.busiest-head .busiest-24h {
+    color: inherit;
+    font-weight: normal;
 }
 .busiest-select-btn {
     background: none;
@@ -554,6 +585,12 @@ button, label, input[type="checkbox"], input[type="range"] {
         gap: 10px;
         font-size: 0.82em;
         padding: 0 10px 0 12px;
+    }
+    /* Labels, not a tap target — it does not need the 44px touch height. */
+    .busiest-head {
+        min-height: 0;
+        padding-top: 2px;
+        padding-bottom: 2px;
     }
     #busiest-key-body, #longest-key-body {
         gap: 3px;

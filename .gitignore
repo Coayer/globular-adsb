@@ -10,6 +10,7 @@ __pycache__/
 dist/heatmaps/
 dist/flights.json
 dist/traces.json
+dist/hubs24h.json
 
 # Generated data
 archive/

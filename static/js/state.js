@@ -7,6 +7,8 @@ export const state = {
     airportObjects: [],
     tracesEnabled: false,
     traces: {},
+    hubs24h: {},
+    hubs24hDay: '',
     timelapseIsPlaying: false,
     busiestHasData: false,
     longestHasData: false,

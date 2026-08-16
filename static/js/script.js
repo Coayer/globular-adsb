@@ -2,7 +2,7 @@ import { globe, isMobile } from './globe.js';
 import { loadAirports, computeAirportObjects } from './airports.js';
 import { state } from './state.js';
 import { clearSelection, selectFlight, selectAirport, refreshBusiestKey } from './selection.js';
-import { refreshFlights, updateObjectsData, fetchTraces, updateTracePaths } from './flights.js';
+import { refreshFlights, updateObjectsData, fetchTraces, updateTracePaths, fetchHubs24h } from './flights.js';
 import { initHeatmap, heatmapView } from './heatmap.js';
 import { initAutopilot } from './autopilot.js';
 
@@ -64,5 +64,9 @@ document.getElementById('traces-toggle').addEventListener('change', e => {
 loadAirports();
 refreshFlights();
 setInterval(refreshFlights, 15 * 60 * 1000);
+// Regenerated once an hour by the render tick, so there is nothing to gain
+// from polling it at the 15-minute flight cadence.
+fetchHubs24h();
+setInterval(fetchHubs24h, 60 * 60 * 1000);
 initHeatmap();
 initAutopilot();

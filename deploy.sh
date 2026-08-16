@@ -1,1 +1,1 @@
-rsync -av --exclude .venv --exclude .git --exclude .wrangler --exclude */__pycache__/ --exclude archive --exclude data --exclude dist/heatmaps --exclude dist/flights.json . optiplex:~/globular-adsb
+rsync -av --exclude .venv --exclude .git --exclude .wrangler --exclude */__pycache__/ --exclude archive --exclude data --exclude dist/heatmaps --exclude dist/flights.json --exclude dist/hubs24h.json . optiplex:~/globular-adsb

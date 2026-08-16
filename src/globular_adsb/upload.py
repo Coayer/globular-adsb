@@ -50,6 +50,12 @@ def upload_flights(dist_dir: Path) -> None:
         upload_file(traces, "traces.json")
 
 
+def upload_hubs(dist_dir: Path) -> None:
+    hubs = dist_dir / "hubs24h.json"
+    if hubs.exists():
+        upload_file(hubs, "hubs24h.json")
+
+
 def _recent(path: Path) -> bool:
     return path.exists() and (time.time() - path.stat().st_mtime) < 86400
 

@@ -5,6 +5,7 @@ import logging
 from globular_adsb import config
 from globular_adsb import flights as flights_mod
 from globular_adsb import heatmap as heatmap_mod
+from globular_adsb import hubs as hubs_mod
 from globular_adsb import upload
 
 log = logging.getLogger(__name__)
@@ -32,9 +33,15 @@ def run_render() -> None:
     else:
         log.info("Skipping — frames up to date until next midnight.")
 
+    # Independent of the heatmap gate above — the 24h hub counts are cheap and
+    # should keep moving even on ticks where the frames are already current.
+    log.info("=== aggregate 24h hub counts ===")
+    hubs_mod.run(config.ARCHIVE_DIR, config.DIST_DIR, config.AIRPORTS_CSV)
+
     log.info("=== upload heatmaps ===")
     try:
         upload.upload_heatmaps(config.DIST_DIR)
+        upload.upload_hubs(config.DIST_DIR)
     except upload.CredentialsError as e:
         log.warning("Skipping heatmap upload: %s", e)
 
