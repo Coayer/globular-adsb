@@ -420,9 +420,43 @@ function fitCameraFov(width, height) {
     camera.updateProjectionMatrix();
 }
 
+// The toolbar sits over the bottom of the canvas, so a globe centred in the
+// viewport looks low: the gap above it is the full margin, the gap below is
+// eaten by the bar. Lift the globe by half the strip the bar occupies so it is
+// centred in the space actually left visible. This has to go through globe.gl's
+// own globeOffset (px, +y = down) rather than camera.setViewOffset, because the
+// library re-applies its own view offset from that prop whenever the canvas is
+// resized and would wipe a hand-set one. Measure #bottom-row rather than the
+// whole #controls column: the key panels stacked above it are narrow and off to
+// the left, so counting them throws the globe too high.
+const toolbarEl = document.getElementById("bottom-row");
+// Turn this down to drop the globe, up to raise it.
+const TOOLBAR_LIFT = 0.5;
+
+function applyControlsOffset(height) {
+    const rect = toolbarEl ? toolbarEl.getBoundingClientRect() : null;
+    // Measure from the bar's top edge rather than its height so its bottom
+    // margin counts as occupied space too.
+    const occluded = rect && rect.height ? Math.max(0, height - rect.top) : 0;
+    // Guard against a very tall bar (chips wrapping on a short window) pushing
+    // the globe off the top of the view.
+    const lift = Math.min(occluded * TOOLBAR_LIFT, height * 0.15);
+    globe.globeOffset([0, -lift]);
+}
+
 fitCameraFov(window.innerWidth, window.innerHeight);
+applyControlsOffset(window.innerHeight);
 
 window.addEventListener("resize", () => {
     globe.width(window.innerWidth).height(window.innerHeight);
     fitCameraFov(window.innerWidth, window.innerHeight);
+    applyControlsOffset(window.innerHeight);
 });
+
+// The bar grows and shrinks as controls appear, the UI is hidden or chips wrap,
+// none of which fire a window resize.
+if (toolbarEl && window.ResizeObserver) {
+    new ResizeObserver(() => {
+        applyControlsOffset(window.innerHeight);
+    }).observe(toolbarEl);
+}
